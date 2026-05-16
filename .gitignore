@@ -2,3 +2,4 @@
 __pycache__/
 *.pyc
 dental.db
+DEPLOY.md
