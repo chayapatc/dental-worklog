@@ -394,7 +394,10 @@ def trends_report():
 
 
 # ── Main ─────────────────────────────────────────────────────────────────
+
+# Initialize DB on import (for WSGI/production) — idempotent, safe to call repeatedly
+init_db()
+
 if __name__ == "__main__":
-    init_db()
     print(" Dental Worklog running at http://localhost:5199")
     app.run(host="127.0.0.1", port=5199, debug=True)
