@@ -1,4 +1,4 @@
-// Dental Worklog — Frontend Logic (with auth)
+// Dental Worklog — Frontend Logic (Pico CSS + auth)
 
 let clinicsCache = [];
 let rankingChart = null;
@@ -30,7 +30,6 @@ function showLogin() {
 function showApp() {
   document.getElementById("login-screen").classList.add("hidden");
   document.getElementById("app-screen").classList.remove("hidden");
-  // Display user info
   document.getElementById("user-name").textContent = currentUser.name;
   const av = document.getElementById("user-avatar");
   if (currentUser.avatar_url) {
@@ -46,16 +45,17 @@ function logout() {
 }
 
 // ── Navigation ──────────────────────────────────────────────────────────
-document.querySelectorAll("nav button").forEach(btn => {
-  btn.addEventListener("click", () => {
-    document.querySelectorAll("nav button").forEach(b => b.classList.remove("active"));
-    btn.classList.add("active");
+document.querySelectorAll("nav [data-view]").forEach(link => {
+  link.addEventListener("click", (e) => {
+    e.preventDefault();
+    document.querySelectorAll("nav [data-view]").forEach(b => b.classList.remove("active"));
+    link.classList.add("active");
     document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
-    document.getElementById("view-" + btn.dataset.view).classList.add("active");
-    if (btn.dataset.view === "log") refreshLogView();
-    if (btn.dataset.view === "clinics") refreshClinics();
-    if (btn.dataset.view === "ranking") refreshRanking();
-    if (btn.dataset.view === "trends") refreshTrends();
+    document.getElementById("view-" + link.dataset.view).classList.add("active");
+    if (link.dataset.view === "log") refreshLogView();
+    if (link.dataset.view === "clinics") refreshClinics();
+    if (link.dataset.view === "ranking") refreshRanking();
+    if (link.dataset.view === "trends") refreshTrends();
   });
 });
 
@@ -76,7 +76,6 @@ async function api(url, opts = {}) {
     headers: { "Content-Type": "application/json" },
     ...opts,
   });
-  // Redirect to login if session expired
   if (res.status === 401) {
     showLogin();
     throw new Error("Session expired — please login again");
@@ -100,7 +99,6 @@ async function loadClinics() {
   return clinicsCache;
 }
 
-// ── Populate Clinic Dropdown ───────────────────────────────────────────
 function populateClinicSelect() {
   const sel = document.getElementById("log-clinic");
   sel.innerHTML = '<option value="">-- Select --</option>';
@@ -114,7 +112,7 @@ async function refreshClinics() {
   await loadClinics();
   const tbody = document.querySelector("#clinics-table tbody");
   if (clinicsCache.length === 0) {
-    tbody.innerHTML = '<tr><td class="empty" colspan="2">No clinics yet — add one above</td></tr>';
+    tbody.innerHTML = '<tr><td class="text-center" colspan="2">No clinics yet</td></tr>';
     return;
   }
   tbody.innerHTML = clinicsCache.map(c =>
@@ -127,10 +125,7 @@ async function addClinic() {
   const name = input.value.trim();
   if (!name) return toast("Enter a clinic name", true);
   try {
-    await api("/api/clinics", {
-      method: "POST",
-      body: JSON.stringify({ name }),
-    });
+    await api("/api/clinics", { method: "POST", body: JSON.stringify({ name }) });
     input.value = "";
     toast("Clinic added!");
     await refreshClinics();
@@ -154,7 +149,7 @@ async function refreshRecentLogs() {
   try {
     const logs = await api("/api/logs");
     if (logs.length === 0) {
-      tbody.innerHTML = '<tr><td class="empty" colspan="4">No entries yet</td></tr>';
+      tbody.innerHTML = '<tr><td class="text-center" colspan="5">No entries yet</td></tr>';
       return;
     }
     tbody.innerHTML = logs.map(l =>
@@ -214,16 +209,14 @@ function rateClass(rate) {
 
 async function refreshRanking() {
   const period = getActivePeriod("ranking-period-toggle");
-  const title = document.getElementById("ranking-title");
-  title.textContent = `Ranking by Avg Hourly Rate (${period})`;
+  document.getElementById("ranking-title").textContent = `Ranking by Avg Hourly Rate (${period})`;
 
   try {
     const data = await api(`/api/reports/ranking?period=${period}`);
 
-    // Table
     const tbody = document.querySelector("#ranking-table tbody");
     if (data.length === 0) {
-      tbody.innerHTML = '<tr><td class="empty" colspan="5">No data yet — log some work hours first</td></tr>';
+      tbody.innerHTML = '<tr><td class="text-center" colspan="5">No data yet — log some work hours first</td></tr>';
     } else {
       const periods = [...new Set(data.map(d => d.period))].sort().reverse();
       const latestPeriod = periods[0];
@@ -254,18 +247,16 @@ async function refreshRanking() {
       }),
       borderColor: colors[i % colors.length],
       backgroundColor: colors[i % colors.length] + "20",
-      tension: 0.3,
-      spanGaps: true,
+      tension: 0.3, spanGaps: true,
     }));
     rankingChart = new Chart(ctx, {
-      type: "line",
-      data: { labels: allPeriods, datasets },
+      type: "line", data: { labels: allPeriods, datasets },
       options: {
         responsive: true, maintainAspectRatio: false,
         plugins: { legend: { labels: { color: "#94a3b8", boxWidth: 12, padding: 12 } } },
         scales: {
-          x: { ticks: { color: "#64748b", maxTicksLimit: 12 } },
-          y: { ticks: { color: "#64748b", callback: v => "฿" + v.toLocaleString() } },
+          x: { ticks: { color: "#64748b", maxTicksLimit: 12 }, grid: { color: "rgba(255,255,255,0.06)" } },
+          y: { ticks: { color: "#64748b", callback: v => "฿" + v.toLocaleString() }, grid: { color: "rgba(255,255,255,0.06)" } },
         },
       },
     });
@@ -292,18 +283,16 @@ async function refreshTrends() {
       }),
       borderColor: colors[i % colors.length],
       backgroundColor: colors[i % colors.length] + "20",
-      tension: 0.3,
-      spanGaps: true,
+      tension: 0.3, spanGaps: true,
     }));
     trendsChart = new Chart(ctx, {
-      type: "line",
-      data: { labels: allPeriods, datasets },
+      type: "line", data: { labels: allPeriods, datasets },
       options: {
         responsive: true, maintainAspectRatio: false,
         plugins: { legend: { labels: { color: "#94a3b8", boxWidth: 12, padding: 12 } } },
         scales: {
-          x: { ticks: { color: "#64748b", maxTicksLimit: 12 } },
-          y: { ticks: { color: "#64748b", callback: v => "฿" + v.toLocaleString() } },
+          x: { ticks: { color: "#64748b", maxTicksLimit: 12 }, grid: { color: "rgba(255,255,255,0.06)" } },
+          y: { ticks: { color: "#64748b", callback: v => "฿" + v.toLocaleString() }, grid: { color: "rgba(255,255,255,0.06)" } },
         },
       },
     });
