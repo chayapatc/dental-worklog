@@ -65,8 +65,9 @@ document.querySelectorAll(".toggle-group button").forEach(btn => {
     const group = btn.parentElement;
     group.querySelectorAll("button").forEach(b => b.classList.remove("active"));
     btn.classList.add("active");
-    if (group.id === "ranking-period-toggle") refreshRanking();
-    if (group.id === "trends-period-toggle") refreshTrends();
+    const section = group.closest("section");
+    if (section.id === "view-ranking") refreshRanking();
+    if (section.id === "view-trends") refreshTrends();
   });
 });
 
@@ -196,8 +197,8 @@ async function submitLog() {
 }
 
 // ── Ranking View ───────────────────────────────────────────────────────
-function getActivePeriod(groupId) {
-  const btn = document.querySelector("#" + groupId + " button.active");
+function getActivePeriod(sectionId) {
+  const btn = document.querySelector("#" + sectionId + " .toggle-group button.active");
   return btn ? btn.dataset.period : "weekly";
 }
 
@@ -208,7 +209,7 @@ function rateClass(rate) {
 }
 
 async function refreshRanking() {
-  const period = getActivePeriod("ranking-period-toggle");
+  const period = getActivePeriod("view-ranking");
   document.getElementById("ranking-title").textContent = `Ranking by Avg Hourly Rate (${period})`;
 
   try {
@@ -267,7 +268,7 @@ async function refreshRanking() {
 
 // ── Trends View ────────────────────────────────────────────────────────
 async function refreshTrends() {
-  const period = getActivePeriod("trends-period-toggle");
+  const period = getActivePeriod("view-trends");
   try {
     const data = await api(`/api/reports/trends?period=${period}`);
     if (trendsChart) trendsChart.destroy();
