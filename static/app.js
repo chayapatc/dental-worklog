@@ -359,8 +359,9 @@ function rateClass(rate) {
 
 async function refreshRanking() {
   const period = getActivePeriod("view-ranking");
-  const periodLabel = period === "weekly" ? "week" : "month";
-  document.getElementById("ranking-title").textContent = `Ranking by Avg Hourly Rate`;
+  const periodLabels = { weekly: "week", monthly: "month", quarterly: "quarter", semiyearly: "half-year" };
+  const periodLabel = periodLabels[period] || "week";
+  document.getElementById("ranking-title").textContent = "Ranking by Avg Hourly Rate";
   document.getElementById("ranking-subtitle").textContent = `Grouped by ${periodLabel}`;
 
   try {
@@ -379,6 +380,8 @@ async function refreshRanking() {
       // Format the period label
       if (period === "weekly") {
         labelEl.textContent = `Week of ${latestPeriod}`;
+      } else if (period === "quarterly" || period === "semiyearly") {
+        labelEl.textContent = `${latestPeriod}`;
       } else {
         labelEl.textContent = `${latestPeriod}`;
       }

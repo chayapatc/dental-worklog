@@ -356,6 +356,24 @@ def _month_start(d):
     return dt.strftime("%Y-%m") if dt else None
 
 
+def _quarter_start(d):
+    """Return YYYY-QN of the quarter containing date d."""
+    dt = _parse_date(d)
+    if dt is None:
+        return None
+    quarter = (dt.month - 1) // 3 + 1
+    return f"{dt.year}-Q{quarter}"
+
+
+def _half_start(d):
+    """Return YYYY-HN of the half-year containing date d."""
+    dt = _parse_date(d)
+    if dt is None:
+        return None
+    half = 1 if dt.month <= 6 else 2
+    return f"{dt.year}-H{half}"
+
+
 @app.route("/api/reports/ranking")
 @login_required
 def ranking_report():
@@ -371,9 +389,17 @@ def ranking_report():
         ORDER BY wl.date DESC
     """, (uid,)).fetchall()
 
+    # Map period to bucketing function
+    bucket_fn = {
+        "weekly": _week_start,
+        "monthly": _month_start,
+        "quarterly": _quarter_start,
+        "semiyearly": _half_start,
+    }.get(period, _week_start)
+
     groups = {}
     for r in rows:
-        bucket = _week_start(r["date"]) if period == "weekly" else _month_start(r["date"])
+        bucket = bucket_fn(r["date"])
         if bucket is None:
             continue
         key = (bucket, r["clinic_id"])
@@ -416,9 +442,17 @@ def trends_report():
 
     rows = db.execute(query, params).fetchall()
 
+    # Map period to bucketing function
+    bucket_fn = {
+        "weekly": _week_start,
+        "monthly": _month_start,
+        "quarterly": _quarter_start,
+        "semiyearly": _half_start,
+    }.get(period, _week_start)
+
     groups = {}
     for r in rows:
-        bucket = _week_start(r["date"]) if period == "weekly" else _month_start(r["date"])
+        bucket = bucket_fn(r["date"])
         if bucket is None:
             continue
         key = (bucket, r["clinic_id"])
