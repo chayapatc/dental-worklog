@@ -248,6 +248,18 @@
 
 </div>
 
+<!-- Delete Confirmation Modal -->
+<dialog id="confirm-dialog">
+  <article>
+    <h3 id="confirm-title">Delete Clinic</h3>
+    <p id="confirm-message">Are you sure? This won't affect existing work logs.</p>
+    <footer>
+      <button class="secondary" onclick="closeConfirm()">Cancel</button>
+      <button class="contrast" id="confirm-btn" onclick="executeDelete()">Delete</button>
+    </footer>
+  </article>
+</dialog>
+
 <div id="toast" class="toast"></div>
 
 <script src="/static/app.js"></script>

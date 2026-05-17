@@ -109,16 +109,63 @@ function populateClinicSelect() {
 }
 
 // ── Clinics View ────────────────────────────────────────────────────────
+let editingClinicId = null;
+
 async function refreshClinics() {
   await loadClinics();
   const tbody = document.querySelector("#clinics-table tbody");
   if (clinicsCache.length === 0) {
-    tbody.innerHTML = '<tr><td class="text-center" colspan="2">No clinics yet</td></tr>';
+    tbody.innerHTML = '<tr><td class="text-center" colspan="3">No clinics yet</td></tr>';
     return;
   }
-  tbody.innerHTML = clinicsCache.map(c =>
-    `<tr><td>${c.name}</td></tr>`
-  ).join("");
+  tbody.innerHTML = clinicsCache.map(c => {
+    if (editingClinicId === c.id) {
+      return `<tr>
+        <td><input type="text" id="edit-name-${c.id}" value="${c.name.replace(/"/g, '&quot;')}" style="width:100%"></td>
+        <td style="text-align:right;white-space:nowrap;">
+          <button class="outline secondary" style="padding:0.2rem 0.5rem;font-size:0.75rem;" onclick="saveEdit(${c.id})">Save</button>
+          <button class="outline contrast" style="padding:0.2rem 0.5rem;font-size:0.75rem;" onclick="cancelEdit()">✕</button>
+        </td>
+      </tr>`;
+    }
+    return `<tr>
+      <td>${c.name}</td>
+      <td style="text-align:right;white-space:nowrap;">
+        <button class="outline secondary" style="padding:0.2rem 0.5rem;font-size:0.75rem;" onclick="startEdit(${c.id}, '${c.name.replace(/'/g, "\\'")}')">Edit</button>
+        <button class="outline contrast" style="padding:0.2rem 0.5rem;font-size:0.75rem;" onclick="confirmDelete(${c.id}, '${c.name.replace(/'/g, "\\'")}')">Delete</button>
+      </td>
+    </tr>`;
+  }).join("");
+}
+
+function startEdit(id, name) {
+  editingClinicId = id;
+  refreshClinics();
+  setTimeout(() => {
+    const inp = document.getElementById(`edit-name-${id}`);
+    if (inp) { inp.focus(); inp.select(); }
+  }, 50);
+}
+
+function cancelEdit() {
+  editingClinicId = null;
+  refreshClinics();
+}
+
+async function saveEdit(id) {
+  const inp = document.getElementById(`edit-name-${id}`);
+  const name = inp.value.trim();
+  if (!name) return toast("Name cannot be empty", true);
+  try {
+    await api(`/api/clinics/${id}`, { method: "PUT", body: JSON.stringify({ name }) });
+    editingClinicId = null;
+    toast("Clinic updated!");
+    await refreshClinics();
+    await loadClinics();
+    populateClinicSelect();
+  } catch (e) {
+    toast(e.message, true);
+  }
 }
 
 async function addClinic() {
@@ -129,6 +176,35 @@ async function addClinic() {
     await api("/api/clinics", { method: "POST", body: JSON.stringify({ name }) });
     input.value = "";
     toast("Clinic added!");
+    await refreshClinics();
+    await loadClinics();
+    populateClinicSelect();
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+// ── Confirm Dialog ──────────────────────────────────────────────────────
+let pendingDeleteId = null;
+
+function confirmDelete(id, name) {
+  pendingDeleteId = id;
+  document.getElementById("confirm-message").textContent = `Delete "${name}"? This won't affect existing work logs.`;
+  document.getElementById("confirm-dialog").showModal();
+}
+
+function closeConfirm() {
+  pendingDeleteId = null;
+  document.getElementById("confirm-dialog").close();
+}
+
+async function executeDelete() {
+  if (!pendingDeleteId) return;
+  try {
+    await api(`/api/clinics/${pendingDeleteId}`, { method: "DELETE" });
+    pendingDeleteId = null;
+    document.getElementById("confirm-dialog").close();
+    toast("Clinic removed from list (work logs preserved)");
     await refreshClinics();
     await loadClinics();
     populateClinicSelect();

@@ -192,7 +192,7 @@ def index():
 def list_clinics():
     db = get_db()
     rows = db.execute(
-        "SELECT id, name FROM clinics WHERE user_id=? ORDER BY name",
+        "SELECT id, name FROM clinics WHERE user_id=? AND deleted=0 ORDER BY name",
         (current_user_id(),),
     ).fetchall()
     return jsonify([dict(r) for r in rows])
@@ -215,6 +215,48 @@ def create_clinic():
         return jsonify({"id": cur.lastrowid, "name": name}), 201
     except sqlite3.IntegrityError:
         return jsonify({"error": "Clinic already exists"}), 409
+
+
+@app.route("/api/clinics/<int:clinic_id>", methods=["PUT"])
+@login_required
+def update_clinic(clinic_id):
+    data = request.get_json(force=True)
+    name = data.get("name", "").strip()
+    if not name:
+        return jsonify({"error": "Clinic name is required"}), 400
+
+    db = get_db()
+    uid = current_user_id()
+    row = db.execute(
+        "SELECT id FROM clinics WHERE id=? AND user_id=? AND deleted=0",
+        (clinic_id, uid),
+    ).fetchone()
+    if not row:
+        return jsonify({"error": "Clinic not found"}), 404
+
+    try:
+        db.execute("UPDATE clinics SET name=? WHERE id=?", (name, clinic_id))
+        db.commit()
+        return jsonify({"id": clinic_id, "name": name})
+    except sqlite3.IntegrityError:
+        return jsonify({"error": "Clinic name already exists"}), 409
+
+
+@app.route("/api/clinics/<int:clinic_id>", methods=["DELETE"])
+@login_required
+def delete_clinic(clinic_id):
+    db = get_db()
+    uid = current_user_id()
+    row = db.execute(
+        "SELECT id FROM clinics WHERE id=? AND user_id=? AND deleted=0",
+        (clinic_id, uid),
+    ).fetchone()
+    if not row:
+        return jsonify({"error": "Clinic not found"}), 404
+
+    db.execute("UPDATE clinics SET deleted=1 WHERE id=?", (clinic_id,))
+    db.commit()
+    return jsonify({"deleted": True})
 
 
 # ── Work Logs API ───────────────────────────────────────────────────────
