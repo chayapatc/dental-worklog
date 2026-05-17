@@ -2,7 +2,6 @@
 
 let clinicsCache = [];
 let rankingChart = null;
-let trendsChart = null;
 let currentUser = null;
 
 // ── Color Presets ───────────────────────────────────────────────────────
@@ -80,7 +79,6 @@ document.querySelectorAll("nav [data-view]").forEach(link => {
     if (link.dataset.view === "log") refreshLogView();
     if (link.dataset.view === "clinics") refreshClinics();
     if (link.dataset.view === "ranking") refreshRanking();
-    if (link.dataset.view === "trends") refreshTrends();
   });
 });
 
@@ -92,7 +90,6 @@ document.querySelectorAll(".toggle-group button").forEach(btn => {
     btn.classList.add("active");
     const section = group.closest("section");
     if (section.id === "view-ranking") refreshRanking();
-    if (section.id === "view-trends") refreshTrends();
   });
 });
 
@@ -418,44 +415,6 @@ async function refreshRanking() {
       };
     });
     rankingChart = new Chart(ctx, {
-      type: "line", data: { labels: allPeriods, datasets },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { labels: { color: "#94a3b8", boxWidth: 12, padding: 12 } } },
-        scales: {
-          x: { ticks: { color: "#64748b", maxTicksLimit: 12 }, grid: { color: "rgba(255,255,255,0.06)" } },
-          y: { ticks: { color: "#64748b", callback: v => "฿" + v.toLocaleString() }, grid: { color: "rgba(255,255,255,0.06)" } },
-        },
-      },
-    });
-  } catch (e) {
-    toast(e.message, true);
-  }
-}
-
-// ── Trends View ────────────────────────────────────────────────────────
-async function refreshTrends() {
-  const period = getActivePeriod("view-trends");
-  try {
-    const data = await api(`/api/reports/trends?period=${period}`);
-    if (trendsChart) trendsChart.destroy();
-    const ctx = document.getElementById("trends-chart").getContext("2d");
-    const allClinics = [...new Set(data.map(d => d.clinic_name))];
-    const allPeriods = [...new Set(data.map(d => d.period))].sort().slice(-12);
-    const datasets = allClinics.map(name => {
-      const clinicColor = data.find(d => d.clinic_name === name)?.color || "#38bdf8";
-      return {
-        label: name,
-        data: allPeriods.map(p => {
-          const entry = data.find(d => d.clinic_name === name && d.period === p);
-          return entry ? entry.hourly_rate : null;
-        }),
-        borderColor: clinicColor,
-        backgroundColor: clinicColor + "20",
-        tension: 0.3, spanGaps: true,
-      };
-    });
-    trendsChart = new Chart(ctx, {
       type: "line", data: { labels: allPeriods, datasets },
       options: {
         responsive: true, maintainAspectRatio: false,
