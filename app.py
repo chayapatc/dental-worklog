@@ -319,6 +319,23 @@ def create_log():
     return jsonify({"id": cur.lastrowid}), 201
 
 
+@app.route("/api/logs/<int:log_id>", methods=["DELETE"])
+@login_required
+def delete_log(log_id):
+    db = get_db()
+    uid = current_user_id()
+    row = db.execute(
+        "SELECT id FROM work_logs WHERE id=? AND user_id=?",
+        (log_id, uid),
+    ).fetchone()
+    if not row:
+        return jsonify({"error": "Log entry not found"}), 404
+
+    db.execute("DELETE FROM work_logs WHERE id=?", (log_id,))
+    db.commit()
+    return jsonify({"deleted": True})
+
+
 # ── Reports API ──────────────────────────────────────────────────────────
 def _parse_date(d):
     if isinstance(d, datetime):

@@ -237,28 +237,50 @@ async function addClinic() {
 
 // ── Confirm Dialog ──────────────────────────────────────────────────────
 let pendingDeleteId = null;
+let pendingDeleteType = null;  // "clinic" or "log"
 
 function confirmDelete(id, name) {
   pendingDeleteId = id;
+  pendingDeleteType = "clinic";
+  document.getElementById("confirm-title").textContent = "Delete Clinic";
   document.getElementById("confirm-message").textContent = `Delete "${name}"? This won't affect existing work logs.`;
+  document.getElementById("confirm-btn").textContent = "Delete";
+  document.getElementById("confirm-dialog").showModal();
+}
+
+function confirmDeleteLog(id, date, clinic) {
+  pendingDeleteId = id;
+  pendingDeleteType = "log";
+  document.getElementById("confirm-title").textContent = "Delete Log Entry";
+  document.getElementById("confirm-message").textContent = `Delete entry: ${date} at ${clinic}? This cannot be undone.`;
+  document.getElementById("confirm-btn").textContent = "Delete";
   document.getElementById("confirm-dialog").showModal();
 }
 
 function closeConfirm() {
   pendingDeleteId = null;
+  pendingDeleteType = null;
   document.getElementById("confirm-dialog").close();
 }
 
 async function executeDelete() {
   if (!pendingDeleteId) return;
   try {
-    await api(`/api/clinics/${pendingDeleteId}`, { method: "DELETE" });
+    if (pendingDeleteType === "log") {
+      await api(`/api/logs/${pendingDeleteId}`, { method: "DELETE" });
+      document.getElementById("confirm-dialog").close();
+      toast("Log entry deleted");
+      await refreshRecentLogs();
+    } else {
+      await api(`/api/clinics/${pendingDeleteId}`, { method: "DELETE" });
+      document.getElementById("confirm-dialog").close();
+      toast("Clinic removed from list (work logs preserved)");
+      await refreshClinics();
+      await loadClinics();
+      populateClinicSelect();
+    }
     pendingDeleteId = null;
-    document.getElementById("confirm-dialog").close();
-    toast("Clinic removed from list (work logs preserved)");
-    await refreshClinics();
-    await loadClinics();
-    populateClinicSelect();
+    pendingDeleteType = null;
   } catch (e) {
     toast(e.message, true);
   }
@@ -277,7 +299,7 @@ async function refreshRecentLogs() {
   try {
     const logs = await api("/api/logs");
     if (logs.length === 0) {
-      tbody.innerHTML = '<tr><td class="text-center" colspan="5">No entries yet</td></tr>';
+      tbody.innerHTML = '<tr><td class="text-center" colspan="6">No entries yet</td></tr>';
       return;
     }
     tbody.innerHTML = logs.map(l =>
@@ -287,6 +309,9 @@ async function refreshRecentLogs() {
         <td>${l.hours}h</td>
         <td style="text-align:right">฿${l.income.toLocaleString()}</td>
         <td style="text-align:right" class="rate-good">฿${Math.round(l.income/l.hours)}/h</td>
+        <td style="text-align:center;">
+          <button class="outline contrast" style="padding:0.1rem 0.4rem;font-size:0.7rem;" onclick="confirmDeleteLog(${l.id}, '${l.date}', '${l.clinic_name.replace(/'/g, "\\'")}')" title="Delete">✕</button>
+        </td>
       </tr>`
     ).join("");
   } catch (e) {
