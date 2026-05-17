@@ -210,17 +210,30 @@ function rateClass(rate) {
 
 async function refreshRanking() {
   const period = getActivePeriod("view-ranking");
-  document.getElementById("ranking-title").textContent = `Ranking by Avg Hourly Rate (${period})`;
+  const periodLabel = period === "weekly" ? "week" : "month";
+  document.getElementById("ranking-title").textContent = `Ranking by Avg Hourly Rate`;
+  document.getElementById("ranking-subtitle").textContent = `Grouped by ${periodLabel}`;
 
   try {
     const data = await api(`/api/reports/ranking?period=${period}`);
 
     const tbody = document.querySelector("#ranking-table tbody");
+    const labelEl = document.getElementById("ranking-period-label");
+
     if (data.length === 0) {
       tbody.innerHTML = '<tr><td class="text-center" colspan="5">No data yet — log some work hours first</td></tr>';
+      labelEl.textContent = "";
     } else {
       const periods = [...new Set(data.map(d => d.period))].sort().reverse();
       const latestPeriod = periods[0];
+
+      // Format the period label
+      if (period === "weekly") {
+        labelEl.textContent = `Week of ${latestPeriod}`;
+      } else {
+        labelEl.textContent = `${latestPeriod}`;
+      }
+
       const latest = data.filter(d => d.period === latestPeriod);
       const ranked = latest.sort((a, b) => b.hourly_rate - a.hourly_rate);
       tbody.innerHTML = ranked.map((d, i) =>
