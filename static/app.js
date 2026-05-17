@@ -5,6 +5,29 @@ let rankingChart = null;
 let trendsChart = null;
 let currentUser = null;
 
+// ── Color Presets ───────────────────────────────────────────────────────
+const COLOR_PRESETS = [
+  "#38bdf8", "#4ade80", "#fbbf24", "#f87171",
+  "#a78bfa", "#fb923c", "#2dd4bf", "#f472b6",
+  "#60a5fa", "#34d399",
+];
+let selectedColor = COLOR_PRESETS[0];
+
+function buildColorSwatches(currentColor) {
+  return COLOR_PRESETS.map(c =>
+    `<span onclick="selectColor('${c}')" style="
+      display:inline-block;width:22px;height:22px;border-radius:50%;
+      background:${c};cursor:pointer;border:2px solid ${c === currentColor ? '#fff' : 'transparent'};
+      transition:border 0.15s;
+    " title="${c}"></span>`
+  ).join("");
+}
+
+function selectColor(color) {
+  selectedColor = color;
+  document.getElementById("color-swatches").innerHTML = buildColorSwatches(color);
+}
+
 // ── Auth Bootstrap ──────────────────────────────────────────────────────
 async function checkAuth() {
   try {
@@ -38,6 +61,8 @@ function showApp() {
   } else {
     av.style.display = "none";
   }
+  // Initialize color swatches on add clinic form
+  document.getElementById("color-swatches").innerHTML = buildColorSwatches(COLOR_PRESETS[0]);
 }
 
 function logout() {
@@ -119,9 +144,13 @@ async function refreshClinics() {
     return;
   }
   tbody.innerHTML = clinicsCache.map(c => {
+    const dot = `<span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${c.color};margin-right:0.5rem;vertical-align:middle;"></span>`;
     if (editingClinicId === c.id) {
       return `<tr>
-        <td><input type="text" id="edit-name-${c.id}" value="${c.name.replace(/"/g, '&quot;')}" style="width:100%"></td>
+        <td>
+          <input type="text" id="edit-name-${c.id}" value="${c.name.replace(/"/g, '&quot;')}" style="width:100%;margin-bottom:0.3rem;">
+          <div class="edit-swatches-${c.id}" style="display:flex;gap:0.2rem;">${buildColorSwatchesForEdit(c.id, c.color)}</div>
+        </td>
         <td style="text-align:right;white-space:nowrap;">
           <button class="outline secondary" style="padding:0.2rem 0.5rem;font-size:0.75rem;" onclick="saveEdit(${c.id})">Save</button>
           <button class="outline contrast" style="padding:0.2rem 0.5rem;font-size:0.75rem;" onclick="cancelEdit()">✕</button>
@@ -129,17 +158,35 @@ async function refreshClinics() {
       </tr>`;
     }
     return `<tr>
-      <td>${c.name}</td>
+      <td>${dot}${c.name}</td>
       <td style="text-align:right;white-space:nowrap;">
-        <button class="outline secondary" style="padding:0.2rem 0.5rem;font-size:0.75rem;" onclick="startEdit(${c.id}, '${c.name.replace(/'/g, "\\'")}')">Edit</button>
+        <button class="outline secondary" style="padding:0.2rem 0.5rem;font-size:0.75rem;" onclick="startEdit(${c.id}, '${c.name.replace(/'/g, "\\'")}', '${c.color}')">Edit</button>
         <button class="outline contrast" style="padding:0.2rem 0.5rem;font-size:0.75rem;" onclick="confirmDelete(${c.id}, '${c.name.replace(/'/g, "\\'")}')">Delete</button>
       </td>
     </tr>`;
   }).join("");
 }
 
-function startEdit(id, name) {
+let editingColor = null;
+
+function buildColorSwatchesForEdit(clinicId, currentColor) {
+  return COLOR_PRESETS.map(c =>
+    `<span onclick="selectEditColor(${clinicId}, '${c}')" style="
+      display:inline-block;width:20px;height:20px;border-radius:50%;
+      background:${c};cursor:pointer;border:2px solid ${c === currentColor ? '#fff' : 'transparent'};
+      transition:border 0.15s;
+    " title="${c}"></span>`
+  ).join("");
+}
+
+function selectEditColor(clinicId, color) {
+  editingColor = color;
+  document.querySelector(`.edit-swatches-${clinicId}`).innerHTML = buildColorSwatchesForEdit(clinicId, color);
+}
+
+function startEdit(id, name, color) {
   editingClinicId = id;
+  editingColor = color;
   refreshClinics();
   setTimeout(() => {
     const inp = document.getElementById(`edit-name-${id}`);
@@ -149,6 +196,7 @@ function startEdit(id, name) {
 
 function cancelEdit() {
   editingClinicId = null;
+  editingColor = null;
   refreshClinics();
 }
 
@@ -157,8 +205,9 @@ async function saveEdit(id) {
   const name = inp.value.trim();
   if (!name) return toast("Name cannot be empty", true);
   try {
-    await api(`/api/clinics/${id}`, { method: "PUT", body: JSON.stringify({ name }) });
+    await api(`/api/clinics/${id}`, { method: "PUT", body: JSON.stringify({ name, color: editingColor }) });
     editingClinicId = null;
+    editingColor = null;
     toast("Clinic updated!");
     await refreshClinics();
     await loadClinics();
@@ -173,8 +222,10 @@ async function addClinic() {
   const name = input.value.trim();
   if (!name) return toast("Enter a clinic name", true);
   try {
-    await api("/api/clinics", { method: "POST", body: JSON.stringify({ name }) });
+    await api("/api/clinics", { method: "POST", body: JSON.stringify({ name, color: selectedColor }) });
     input.value = "";
+    selectedColor = COLOR_PRESETS[0];
+    document.getElementById("color-swatches").innerHTML = buildColorSwatches(COLOR_PRESETS[0]);
     toast("Clinic added!");
     await refreshClinics();
     await loadClinics();
@@ -328,17 +379,19 @@ async function refreshRanking() {
     const ctx = document.getElementById("ranking-chart").getContext("2d");
     const allClinics = [...new Set(data.map(d => d.clinic_name))];
     const allPeriods = [...new Set(data.map(d => d.period))].sort().slice(-12);
-    const colors = ["#38bdf8","#4ade80","#fbbf24","#f87171","#a78bfa","#fb923c","#2dd4bf","#f472b6"];
-    const datasets = allClinics.map((name, i) => ({
-      label: name,
-      data: allPeriods.map(p => {
-        const entry = data.find(d => d.clinic_name === name && d.period === p);
-        return entry ? entry.hourly_rate : null;
-      }),
-      borderColor: colors[i % colors.length],
-      backgroundColor: colors[i % colors.length] + "20",
-      tension: 0.3, spanGaps: true,
-    }));
+    const datasets = allClinics.map(name => {
+      const clinicColor = data.find(d => d.clinic_name === name)?.color || "#38bdf8";
+      return {
+        label: name,
+        data: allPeriods.map(p => {
+          const entry = data.find(d => d.clinic_name === name && d.period === p);
+          return entry ? entry.hourly_rate : null;
+        }),
+        borderColor: clinicColor,
+        backgroundColor: clinicColor + "20",
+        tension: 0.3, spanGaps: true,
+      };
+    });
     rankingChart = new Chart(ctx, {
       type: "line", data: { labels: allPeriods, datasets },
       options: {
@@ -364,17 +417,19 @@ async function refreshTrends() {
     const ctx = document.getElementById("trends-chart").getContext("2d");
     const allClinics = [...new Set(data.map(d => d.clinic_name))];
     const allPeriods = [...new Set(data.map(d => d.period))].sort().slice(-12);
-    const colors = ["#38bdf8","#4ade80","#fbbf24","#f87171","#a78bfa","#fb923c","#2dd4bf","#f472b6"];
-    const datasets = allClinics.map((name, i) => ({
-      label: name,
-      data: allPeriods.map(p => {
-        const entry = data.find(d => d.clinic_name === name && d.period === p);
-        return entry ? entry.hourly_rate : null;
-      }),
-      borderColor: colors[i % colors.length],
-      backgroundColor: colors[i % colors.length] + "20",
-      tension: 0.3, spanGaps: true,
-    }));
+    const datasets = allClinics.map(name => {
+      const clinicColor = data.find(d => d.clinic_name === name)?.color || "#38bdf8";
+      return {
+        label: name,
+        data: allPeriods.map(p => {
+          const entry = data.find(d => d.clinic_name === name && d.period === p);
+          return entry ? entry.hourly_rate : null;
+        }),
+        borderColor: clinicColor,
+        backgroundColor: clinicColor + "20",
+        tension: 0.3, spanGaps: true,
+      };
+    });
     trendsChart = new Chart(ctx, {
       type: "line", data: { labels: allPeriods, datasets },
       options: {

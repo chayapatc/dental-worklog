@@ -192,7 +192,7 @@ def index():
 def list_clinics():
     db = get_db()
     rows = db.execute(
-        "SELECT id, name FROM clinics WHERE user_id=? AND deleted=0 ORDER BY name",
+        "SELECT id, name, color FROM clinics WHERE user_id=? AND deleted=0 ORDER BY name",
         (current_user_id(),),
     ).fetchall()
     return jsonify([dict(r) for r in rows])
@@ -203,16 +203,17 @@ def list_clinics():
 def create_clinic():
     data = request.get_json(force=True)
     name = data.get("name", "").strip()
+    color = data.get("color", "#38bdf8").strip()
     if not name:
         return jsonify({"error": "Clinic name is required"}), 400
     try:
         db = get_db()
         cur = db.execute(
-            "INSERT INTO clinics (user_id, name) VALUES (?,?)",
-            (current_user_id(), name),
+            "INSERT INTO clinics (user_id, name, color) VALUES (?,?,?)",
+            (current_user_id(), name, color),
         )
         db.commit()
-        return jsonify({"id": cur.lastrowid, "name": name}), 201
+        return jsonify({"id": cur.lastrowid, "name": name, "color": color}), 201
     except sqlite3.IntegrityError:
         return jsonify({"error": "Clinic already exists"}), 409
 
@@ -222,6 +223,7 @@ def create_clinic():
 def update_clinic(clinic_id):
     data = request.get_json(force=True)
     name = data.get("name", "").strip()
+    color = data.get("color", "").strip()
     if not name:
         return jsonify({"error": "Clinic name is required"}), 400
 
@@ -235,9 +237,12 @@ def update_clinic(clinic_id):
         return jsonify({"error": "Clinic not found"}), 404
 
     try:
-        db.execute("UPDATE clinics SET name=? WHERE id=?", (name, clinic_id))
+        if color:
+            db.execute("UPDATE clinics SET name=?, color=? WHERE id=?", (name, color, clinic_id))
+        else:
+            db.execute("UPDATE clinics SET name=? WHERE id=?", (name, clinic_id))
         db.commit()
-        return jsonify({"id": clinic_id, "name": name})
+        return jsonify({"id": clinic_id, "name": name, "color": color or None})
     except sqlite3.IntegrityError:
         return jsonify({"error": "Clinic name already exists"}), 409
 
@@ -342,7 +347,7 @@ def ranking_report():
     uid = current_user_id()
 
     rows = db.execute("""
-        SELECT wl.date, wl.hours, wl.income, c.name AS clinic_name, wl.clinic_id
+        SELECT wl.date, wl.hours, wl.income, c.name AS clinic_name, wl.clinic_id, c.color
         FROM work_logs wl
         JOIN clinics c ON wl.clinic_id = c.id
         WHERE wl.user_id = ?
@@ -357,7 +362,7 @@ def ranking_report():
         key = (bucket, r["clinic_id"])
         if key not in groups:
             groups[key] = {"period": bucket, "clinic_id": r["clinic_id"],
-                           "clinic_name": r["clinic_name"],
+                           "clinic_name": r["clinic_name"], "color": r["color"],
                            "total_hours": 0, "total_income": 0}
         groups[key]["total_hours"] += r["hours"]
         groups[key]["total_income"] += r["income"]
@@ -381,7 +386,7 @@ def trends_report():
     uid = current_user_id()
 
     query = """
-        SELECT wl.date, wl.hours, wl.income, c.name AS clinic_name, wl.clinic_id
+        SELECT wl.date, wl.hours, wl.income, c.name AS clinic_name, wl.clinic_id, c.color
         FROM work_logs wl
         JOIN clinics c ON wl.clinic_id = c.id
         WHERE wl.user_id = ?
@@ -402,7 +407,7 @@ def trends_report():
         key = (bucket, r["clinic_id"])
         if key not in groups:
             groups[key] = {"period": bucket, "clinic_id": r["clinic_id"],
-                           "clinic_name": r["clinic_name"],
+                           "clinic_name": r["clinic_name"], "color": r["color"],
                            "total_hours": 0, "total_income": 0}
         groups[key]["total_hours"] += r["hours"]
         groups[key]["total_income"] += r["income"]
