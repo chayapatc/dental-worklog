@@ -6,6 +6,7 @@ import secrets
 import sqlite3
 from datetime import datetime, timedelta
 from functools import wraps
+from pathlib import Path
 
 from dotenv import load_dotenv
 from flask import Flask, g, jsonify, redirect, request, render_template, session, url_for
@@ -47,80 +48,61 @@ def close_db(exception):
 
 
 def init_db():
-    """Create tables and migrate existing ones if needed."""
+    """Run pending migrations from migrations/ directory. Idempotent and safe."""
     db = sqlite3.connect(DATABASE)
     db.execute("PRAGMA foreign_keys=ON")
 
-    db.executescript("""
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            google_id TEXT NOT NULL UNIQUE,
-            email TEXT NOT NULL,
-            name TEXT NOT NULL,
-            avatar_url TEXT DEFAULT '',
-            created_at TEXT DEFAULT (datetime('now','localtime'))
-        );
-
-        CREATE TABLE IF NOT EXISTS clinics (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL DEFAULT 0 REFERENCES users(id) ON DELETE CASCADE,
-            name TEXT NOT NULL,
-            created_at TEXT DEFAULT (datetime('now','localtime'))
-        );
-
-        CREATE TABLE IF NOT EXISTS work_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL DEFAULT 0 REFERENCES users(id) ON DELETE CASCADE,
-            clinic_id INTEGER NOT NULL REFERENCES clinics(id) ON DELETE CASCADE,
-            date TEXT NOT NULL,
-            hours REAL NOT NULL CHECK(hours > 0),
-            income REAL NOT NULL CHECK(income >= 0),
-            created_at TEXT DEFAULT (datetime('now','localtime'))
-        );
+    # Ensure migration tracking table exists (always safe — idempotent)
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS _migrations (
+            name TEXT PRIMARY KEY,
+            applied_at TEXT DEFAULT (datetime('now','localtime'))
+        )
     """)
 
-    # Migration: add missing columns and indexes for pre-auth databases
-    _migrate(db)
+    # Get already-applied migrations
+    applied = {r[0] for r in db.execute("SELECT name FROM _migrations").fetchall()}
 
-    # Create indexes (idempotent — IF NOT EXISTS)
-    db.executescript("""
-        CREATE INDEX IF NOT EXISTS idx_logs_date ON work_logs(date);
-        CREATE INDEX IF NOT EXISTS idx_logs_clinic ON work_logs(clinic_id);
-        CREATE INDEX IF NOT EXISTS idx_logs_user ON work_logs(user_id);
-        CREATE INDEX IF NOT EXISTS idx_clinics_user ON clinics(user_id);
-    """)
+    # Discover migration files
+    migrations_dir = Path(__file__).parent / "migrations"
+    if not migrations_dir.is_dir():
+        db.close()
+        return
+
+    files = sorted(migrations_dir.glob("*.sql"))
+
+    for f in files:
+        if f.name in applied:
+            continue
+
+        sql = f.read_text()
+
+        # ── Special handling for legacy column migration ──────────────
+        if f.name == "002_legacy_user_migration.sql":
+            cols_clinics = {r[1] for r in db.execute("PRAGMA table_info(clinics)").fetchall()}
+            cols_logs = {r[1] for r in db.execute("PRAGMA table_info(work_logs)").fetchall()}
+            if "user_id" not in cols_clinics:
+                db.execute("INSERT OR IGNORE INTO users (google_id, email, name) VALUES ('legacy','','Legacy User')")
+                legacy_id = db.execute("SELECT id FROM users WHERE google_id='legacy'").fetchone()[0]
+                db.execute(f"ALTER TABLE clinics ADD COLUMN user_id INTEGER DEFAULT {legacy_id}")
+                db.execute("UPDATE clinics SET user_id=? WHERE user_id IS NULL", (legacy_id,))
+            if "user_id" not in cols_logs:
+                db.execute("ALTER TABLE work_logs ADD COLUMN user_id INTEGER DEFAULT 0")
+                db.execute("""
+                    UPDATE work_logs SET user_id = (
+                        SELECT COALESCE(c.user_id, 1) FROM clinics c WHERE c.id = work_logs.clinic_id
+                    )
+                """)
+                db.execute("UPDATE work_logs SET user_id=(SELECT id FROM users WHERE google_id='legacy') WHERE user_id=0")
+
+        # Run the SQL (idempotent — uses IF NOT EXISTS / OR IGNORE)
+        db.executescript(sql)
+
+        # Record that this migration was applied
+        db.execute("INSERT INTO _migrations (name) VALUES (?)", (f.name,))
+        db.commit()
 
     db.close()
-
-
-def _migrate(db):
-    """Handle schema upgrades for existing databases."""
-    cols_clinics = {r[1] for r in db.execute("PRAGMA table_info(clinics)").fetchall()}
-    cols_logs = {r[1] for r in db.execute("PRAGMA table_info(work_logs)").fetchall()}
-
-    if "user_id" not in cols_clinics:
-        # Old DB without auth — create a default user and assign all data
-        db.execute("INSERT OR IGNORE INTO users (google_id, email, name) VALUES (?,?,?)",
-                   ("legacy", "", "Legacy User"))
-        legacy_id = db.execute("SELECT id FROM users WHERE google_id='legacy'").fetchone()[0]
-
-        # SQLite ALTER TABLE ADD COLUMN doesn't support parameterized DEFAULT
-        db.execute(f"ALTER TABLE clinics ADD COLUMN user_id INTEGER DEFAULT {legacy_id}")
-        db.execute("UPDATE clinics SET user_id=? WHERE user_id IS NULL", (legacy_id,))
-
-    if "user_id" not in cols_logs:
-        # Assign work_logs to the clinic owner
-        db.execute("ALTER TABLE work_logs ADD COLUMN user_id INTEGER DEFAULT 0")
-        db.execute("""
-            UPDATE work_logs SET user_id = (
-                SELECT COALESCE(c.user_id, 1) FROM clinics c
-                WHERE c.id = work_logs.clinic_id
-            )
-        """)
-        # Fix any remaining 0s
-        db.execute("UPDATE work_logs SET user_id=(SELECT id FROM users WHERE google_id='legacy') WHERE user_id=0")
-
-    db.commit()
 
 
 # ── Auth Helpers ─────────────────────────────────────────────────────────

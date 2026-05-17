@@ -29,6 +29,14 @@
 - Logout clears session and returns to login screen
 - First-time login auto-creates a user profile from Google account info
 
+# Database Schema & Migrations
+- All schema changes MUST be done via numbered SQL migration files in `migrations/`
+- Never modify `init_db()` to contain inline schema — it only runs the migration runner
+- Migrations are tracked in the `_migrations` table and run exactly once per DB
+- All migrations must be idempotent (use `CREATE TABLE IF NOT EXISTS`, `ALTER TABLE ADD COLUMN`, `CREATE INDEX IF NOT EXISTS`)
+- **Never violate existing data** — never DROP columns, never change column types in breaking ways, always use ALTER TABLE ADD COLUMN with safe defaults
+- Migration files are applied in numeric order
+
 # Tech Stack
 - Backend: Python 3 + Flask + SQLite
 - Frontend: Vanilla HTML/CSS/JS + Chart.js (CDN)
