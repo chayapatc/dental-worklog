@@ -271,21 +271,42 @@ def list_logs():
     db = get_db()
     uid = current_user_id()
     clinic_id = request.args.get("clinic_id")
+    page = request.args.get("page", 1, type=int)
+    per_page = request.args.get("per_page", 20, type=int)
 
-    query = """
+    where = "WHERE wl.user_id = ?"
+    params = [uid]
+    if clinic_id:
+        where += " AND wl.clinic_id = ?"
+        params.append(int(clinic_id))
+
+    # Total count
+    count_query = f"""
+        SELECT COUNT(*) FROM work_logs wl
+        JOIN clinics c ON wl.clinic_id = c.id
+        {where}
+    """
+    total = db.execute(count_query, params).fetchone()[0]
+
+    # Paginated rows
+    offset = (page - 1) * per_page
+    rows_query = f"""
         SELECT wl.id, wl.date, wl.hours, wl.income, wl.expense, wl.clinic_id, c.name AS clinic_name
         FROM work_logs wl
         JOIN clinics c ON wl.clinic_id = c.id
-        WHERE wl.user_id = ?
+        {where}
+        ORDER BY wl.date DESC LIMIT ? OFFSET ?
     """
-    params = [uid]
-    if clinic_id:
-        query += " AND wl.clinic_id = ?"
-        params.append(int(clinic_id))
-    query += " ORDER BY wl.date DESC LIMIT 200"
+    rows = db.execute(rows_query, params + [per_page, offset]).fetchall()
 
-    rows = db.execute(query, params).fetchall()
-    return jsonify([dict(r) for r in rows])
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    return jsonify({
+        "logs": [dict(r) for r in rows],
+        "page": page,
+        "per_page": per_page,
+        "total": total,
+        "total_pages": total_pages,
+    })
 
 
 @app.route("/api/logs", methods=["POST"])

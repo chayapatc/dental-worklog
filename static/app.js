@@ -267,6 +267,7 @@ async function executeDelete() {
       await api(`/api/logs/${pendingDeleteId}`, { method: "DELETE" });
       document.getElementById("confirm-dialog").close();
       toast("Log entry deleted");
+      currentPage = 1;
       await refreshRecentLogs();
     } else {
       await api(`/api/clinics/${pendingDeleteId}`, { method: "DELETE" });
@@ -291,12 +292,19 @@ async function refreshLogView() {
   await refreshRecentLogs();
 }
 
+let currentPage = 1;
+const PER_PAGE = 20;
+
 async function refreshRecentLogs() {
   const tbody = document.querySelector("#recent-logs tbody");
+  const footer = document.getElementById("pagination-footer");
   try {
-    const logs = await api("/api/logs");
+    const result = await api(`/api/logs?page=${currentPage}&per_page=${PER_PAGE}`);
+    const { logs, page, total_pages, total } = result;
+
     if (logs.length === 0) {
       tbody.innerHTML = '<tr><td class="text-center" colspan="7">No entries yet</td></tr>';
+      footer.innerHTML = "";
       return;
     }
     tbody.innerHTML = logs.map(l =>
@@ -312,9 +320,21 @@ async function refreshRecentLogs() {
         </td>
       </tr>`
     ).join("");
+
+    footer.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:center;gap:0.75rem;padding:0.75rem 0;">
+        <button class="outline secondary" style="padding:0.2rem 0.75rem;font-size:0.8rem;" onclick="goToPage(${page - 1})" ${page <= 1 ? 'disabled' : ''}>← Prev</button>
+        <span style="font-size:0.8rem;color:var(--pico-muted-color);">Page ${page} of ${total_pages} (${total} entries)</span>
+        <button class="outline secondary" style="padding:0.2rem 0.75rem;font-size:0.8rem;" onclick="goToPage(${page + 1})" ${page >= total_pages ? 'disabled' : ''}>Next →</button>
+      </div>`;
   } catch (e) {
     toast(e.message, true);
   }
+}
+
+function goToPage(p) {
+  currentPage = p;
+  refreshRecentLogs();
 }
 
 async function submitLog() {
@@ -342,6 +362,7 @@ async function submitLog() {
     document.getElementById("log-hours").value = "";
     document.getElementById("log-income").value = "";
     toast("Work log saved!");
+    currentPage = 1;
     await refreshRecentLogs();
   } catch (e) {
     toast(e.message, true);
