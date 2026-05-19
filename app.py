@@ -273,7 +273,7 @@ def list_logs():
     clinic_id = request.args.get("clinic_id")
 
     query = """
-        SELECT wl.id, wl.date, wl.hours, wl.income, wl.clinic_id, c.name AS clinic_name
+        SELECT wl.id, wl.date, wl.hours, wl.income, wl.expense, wl.clinic_id, c.name AS clinic_name
         FROM work_logs wl
         JOIN clinics c ON wl.clinic_id = c.id
         WHERE wl.user_id = ?
@@ -296,6 +296,7 @@ def create_log():
     date = data.get("date")
     hours = data.get("hours")
     income = data.get("income")
+    expense = data.get("expense", 0)
 
     errors = []
     if not clinic_id:
@@ -306,14 +307,16 @@ def create_log():
         errors.append("hours must be > 0")
     if income is None or income < 0:
         errors.append("income must be >= 0")
+    if expense is None or expense < 0:
+        errors.append("expense must be >= 0")
     if errors:
         return jsonify({"error": ", ".join(errors)}), 400
 
     db = get_db()
     uid = current_user_id()
     cur = db.execute(
-        "INSERT INTO work_logs (user_id, clinic_id, date, hours, income) VALUES (?,?,?,?,?)",
-        (uid, int(clinic_id), date, float(hours), float(income)),
+        "INSERT INTO work_logs (user_id, clinic_id, date, hours, income, expense) VALUES (?,?,?,?,?,?)",
+        (uid, int(clinic_id), date, float(hours), float(income), float(expense)),
     )
     db.commit()
     return jsonify({"id": cur.lastrowid}), 201
@@ -382,7 +385,7 @@ def ranking_report():
     uid = current_user_id()
 
     rows = db.execute("""
-        SELECT wl.date, wl.hours, wl.income, c.name AS clinic_name, wl.clinic_id, c.color
+        SELECT wl.date, wl.hours, wl.income, wl.expense, c.name AS clinic_name, wl.clinic_id, c.color
         FROM work_logs wl
         JOIN clinics c ON wl.clinic_id = c.id
         WHERE wl.user_id = ?
@@ -406,13 +409,15 @@ def ranking_report():
         if key not in groups:
             groups[key] = {"period": bucket, "clinic_id": r["clinic_id"],
                            "clinic_name": r["clinic_name"], "color": r["color"],
-                           "total_hours": 0, "total_income": 0}
+                           "total_hours": 0, "total_income": 0, "total_expense": 0}
         groups[key]["total_hours"] += r["hours"]
         groups[key]["total_income"] += r["income"]
+        groups[key]["total_expense"] += r["expense"]
 
     result = []
     for g in groups.values():
-        rate = round(g["total_income"] / g["total_hours"], 2) if g["total_hours"] > 0 else 0
+        net = g["total_income"] - g["total_expense"]
+        rate = round(net / g["total_hours"], 2) if g["total_hours"] > 0 else 0
         g["hourly_rate"] = rate
         result.append(g)
 
@@ -429,7 +434,7 @@ def trends_report():
     uid = current_user_id()
 
     query = """
-        SELECT wl.date, wl.hours, wl.income, c.name AS clinic_name, wl.clinic_id, c.color
+        SELECT wl.date, wl.hours, wl.income, wl.expense, c.name AS clinic_name, wl.clinic_id, c.color
         FROM work_logs wl
         JOIN clinics c ON wl.clinic_id = c.id
         WHERE wl.user_id = ?

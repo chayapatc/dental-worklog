@@ -176,6 +176,10 @@
           <label>Income (฿)</label>
           <input type="number" id="log-income" step="100" min="0" placeholder="15000" required>
         </div>
+        <div class="field">
+          <label>Expense (฿)</label>
+          <input type="number" id="log-expense" step="100" min="0" placeholder="500" value="0">
+        </div>
         <div class="field field-btn">
           <label>&nbsp;</label>
           <button class="primary" onclick="submitLog()">Save</button>
@@ -185,7 +189,7 @@
     <article>
       <h2>Recent Entries</h2>
       <div class="table-wrap">
-        <table id="recent-logs" class="striped"><tbody><tr><td class="text-center" colspan="6">No entries yet</td></tr></tbody></table>
+        <table id="recent-logs" class="striped"><tbody><tr><td class="text-center" colspan="7">No entries yet</td></tr></tbody></table>
       </div>
     </article>
   </section>

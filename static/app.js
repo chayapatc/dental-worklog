@@ -296,7 +296,7 @@ async function refreshRecentLogs() {
   try {
     const logs = await api("/api/logs");
     if (logs.length === 0) {
-      tbody.innerHTML = '<tr><td class="text-center" colspan="6">No entries yet</td></tr>';
+      tbody.innerHTML = '<tr><td class="text-center" colspan="7">No entries yet</td></tr>';
       return;
     }
     tbody.innerHTML = logs.map(l =>
@@ -305,7 +305,8 @@ async function refreshRecentLogs() {
         <td>${l.clinic_name}</td>
         <td>${l.hours}h</td>
         <td style="text-align:right">฿${l.income.toLocaleString()}</td>
-        <td style="text-align:right" class="rate-good">฿${Math.round(l.income/l.hours)}/h</td>
+        <td style="text-align:right">${l.expense > 0 ? '-฿' + l.expense.toLocaleString() : '-'}</td>
+        <td style="text-align:right" class="rate-good">฿${Math.round((l.income - l.expense)/l.hours)}/h</td>
         <td style="text-align:center;">
           <button class="outline contrast" style="padding:0.1rem 0.4rem;font-size:0.7rem;" onclick="confirmDeleteLog(${l.id}, '${l.date}', '${l.clinic_name.replace(/'/g, "\\'")}')" title="Delete">✕</button>
         </td>
@@ -321,6 +322,7 @@ async function submitLog() {
   const date = document.getElementById("log-date").value;
   const hours = document.getElementById("log-hours").value;
   const income = document.getElementById("log-income").value;
+  const expense = document.getElementById("log-expense").value || 0;
 
   if (!clinicId || !date || !hours || !income) {
     return toast("Fill all fields", true);
@@ -334,6 +336,7 @@ async function submitLog() {
         date,
         hours: parseFloat(hours),
         income: parseFloat(income),
+        expense: parseFloat(expense),
       }),
     });
     document.getElementById("log-hours").value = "";
@@ -388,15 +391,16 @@ async function refreshRanking() {
 
       const latest = data.filter(d => d.period === latestPeriod);
       const ranked = latest.sort((a, b) => b.hourly_rate - a.hourly_rate);
-      tbody.innerHTML = ranked.map((d, i) =>
-        `<tr>
+      tbody.innerHTML = ranked.map((d, i) => {
+        const net = d.total_income - (d.total_expense || 0);
+        return `<tr>
           <td class="rank">#${i + 1}</td>
           <td>${d.clinic_name}</td>
           <td>${d.total_hours.toFixed(1)}h</td>
-          <td style="text-align:right">฿${d.total_income.toLocaleString()}</td>
+          <td style="text-align:right">฿${net.toLocaleString()}</td>
           <td style="text-align:right" class="${rateClass(d.hourly_rate)}">฿${d.hourly_rate}/h</td>
-        </tr>`
-      ).join("");
+        </tr>`;
+      }).join("");
     }
 
     // Chart
