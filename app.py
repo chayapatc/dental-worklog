@@ -4,7 +4,7 @@
 import os
 import secrets
 import sqlite3
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from functools import wraps
 from pathlib import Path
 
@@ -497,6 +497,50 @@ def trends_report():
 
     result.sort(key=lambda x: x["period"])
     return jsonify(result)
+
+
+@app.route("/api/reports/income-ranking")
+@login_required
+def income_ranking():
+    """Rank clinics by total net income within a date range. Default: month-to-date (UTC)."""
+    now = datetime.now(timezone.utc)
+    start = request.args.get("start", now.replace(day=1).strftime("%Y-%m-%d"))
+    end = request.args.get("end", now.strftime("%Y-%m-%d"))
+    db = get_db()
+    uid = current_user_id()
+
+    rows = db.execute("""
+        SELECT c.id AS clinic_id, c.name AS clinic_name, c.color,
+               SUM(wl.hours) AS total_hours,
+               SUM(wl.income) AS total_income,
+               SUM(wl.expense) AS total_expense
+        FROM work_logs wl
+        JOIN clinics c ON wl.clinic_id = c.id
+        WHERE wl.user_id = ? AND wl.date >= ? AND wl.date <= ?
+        GROUP BY c.id
+    """, (uid, start, end)).fetchall()
+
+    result = []
+    for r in rows:
+        net = r["total_income"] - r["total_expense"]
+        rate = round(net / r["total_hours"], 2) if r["total_hours"] > 0 else 0
+        result.append({
+            "clinic_id": r["clinic_id"],
+            "clinic_name": r["clinic_name"],
+            "color": r["color"],
+            "total_hours": round(r["total_hours"], 1),
+            "total_income": r["total_income"],
+            "total_expense": r["total_expense"],
+            "net_income": net,
+            "hourly_rate": rate,
+        })
+
+    result.sort(key=lambda x: -x["net_income"])
+    return jsonify({
+        "start": start,
+        "end": end,
+        "rankings": result,
+    })
 
 
 # ── Main ─────────────────────────────────────────────────────────────────

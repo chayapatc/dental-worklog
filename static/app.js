@@ -88,8 +88,19 @@ document.querySelectorAll(".toggle-group button").forEach(btn => {
     const group = btn.parentElement;
     group.querySelectorAll("button").forEach(b => b.classList.remove("active"));
     btn.classList.add("active");
+
+    // View toggle (Hourly Rate / Net Income)
+    if (btn.dataset.rankingView) {
+      const isIncome = btn.dataset.rankingView === "income";
+      document.getElementById("ranking-rate-view").classList.toggle("hidden", isIncome);
+      document.getElementById("ranking-income-view").classList.toggle("hidden", !isIncome);
+      if (isIncome) setDefaultDates();
+      return;
+    }
+
+    // Period toggle (1W/1M/3M/6M)
     const section = group.closest("section");
-    if (section.id === "view-ranking") refreshRanking();
+    if (section && section.id === "view-ranking") refreshRanking();
   });
 });
 
@@ -453,6 +464,48 @@ async function refreshRanking() {
         },
       },
     });
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+// ── Income Ranking ──────────────────────────────────────────────────────
+function setDefaultDates() {
+  // Use local date (not UTC) to respect user's timezone
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  document.getElementById("income-end").value = `${yyyy}-${mm}-${dd}`;
+  document.getElementById("income-start").value = `${yyyy}-${mm}-01`;
+  refreshIncomeRanking();
+}
+
+async function refreshIncomeRanking() {
+  const start = document.getElementById("income-start").value;
+  const end = document.getElementById("income-end").value;
+  if (!start || !end) return;
+
+  const tbody = document.querySelector("#income-ranking-table tbody");
+  try {
+    const result = await api(`/api/reports/income-ranking?start=${start}&end=${end}`);
+    const { rankings } = result;
+
+    if (rankings.length === 0) {
+      tbody.innerHTML = '<tr><td class="text-center" colspan="7">No data in this date range</td></tr>';
+      return;
+    }
+    tbody.innerHTML = rankings.map((d, i) =>
+      `<tr>
+        <td class="rank">#${i + 1}</td>
+        <td>${d.clinic_name}</td>
+        <td>${d.total_hours.toFixed(1)}h</td>
+        <td style="text-align:right">฿${d.total_income.toLocaleString()}</td>
+        <td style="text-align:right">${d.total_expense > 0 ? '-฿' + d.total_expense.toLocaleString() : '-'}</td>
+        <td style="text-align:right" class="rate-good">฿${d.net_income.toLocaleString()}</td>
+        <td style="text-align:right" class="${rateClass(d.hourly_rate)}">฿${d.hourly_rate}/h</td>
+      </tr>`
+    ).join("");
   } catch (e) {
     toast(e.message, true);
   }
