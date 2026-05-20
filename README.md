@@ -20,7 +20,7 @@ A web app for a dentist to log clinic work hours, income, and expenses, then ran
 - Ranked table of the current period, sorted by average net hourly rate
 - Hourly rate calculated as (total income − total expense) / total hours
 
-### Ranking — Net Income
+### Net Income Report
 - Date range picker with month-to-date default
 - Ranks clinics by total net income within the selected date range
 - Table shows hours, gross income, expense, net income, and net hourly rate per clinic
@@ -73,7 +73,7 @@ No build step, no bundler, no Node.js required.
 | POST | `/api/logs` | Create work log (clinic, date, hours, income, expense) |
 | DELETE | `/api/logs/:id` | Hard-delete work log entry |
 | GET | `/api/reports/ranking?period=` | Hourly rate ranking (weekly/monthly/quarterly/semiyearly) |
-| GET | `/api/reports/income-ranking?start=&end=` | Net income ranking with date range |
+| GET | `/api/reports/income-ranking?start=&end=` | Net Income report with date range |
 
 All `/api/*` routes require authentication (401 if not logged in).
 

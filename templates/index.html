@@ -144,7 +144,8 @@
     <ul>
       <li><a href="#" data-view="log" class="active">+ Log</a></li>
       <li><a href="#" data-view="clinics">Clinics</a></li>
-      <li><a href="#" data-view="ranking">Ranking</a></li>
+      <li><a href="#" data-view="ranking">Rate Ranking</a></li>
+      <li><a href="#" data-view="income">Net Income Report</a></li>
     </ul>
   </nav>
   <div class="user-area">
@@ -187,7 +188,10 @@
       </div>
     </article>
     <article>
-      <h2>Recent Entries</h2>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:0.5rem;">
+        <h2 style="margin:0;">Recent Entries</h2>
+        <a href="/api/logs/export" class="outline secondary" style="font-size:0.75rem;padding:0.3rem 0.75rem;border-radius:6px;text-decoration:none;">📥 Export CSV</a>
+      </div>
       <div class="table-wrap">
         <table id="recent-logs" class="striped"><tbody><tr><td class="text-center" colspan="7">No entries yet</td></tr></tbody></table>
       </div>
@@ -224,59 +228,53 @@
 
   <!-- Ranking -->
   <section id="view-ranking" class="view">
-    <!-- View toggle -->
-    <div class="toggle-group" style="margin-bottom:1rem;">
-      <button class="active outline" data-ranking-view="rate">Hourly Rate</button>
-      <button class="outline" data-ranking-view="income">Net Income</button>
+    <div class="toggle-group" id="ranking-period-toggle">
+      <button class="active outline" data-period="weekly">1W</button>
+      <button class="outline" data-period="monthly">1M</button>
+      <button class="outline" data-period="quarterly">3M</button>
+      <button class="outline" data-period="semiyearly">6M</button>
     </div>
-
-    <!-- Hourly Rate view -->
-    <div id="ranking-rate-view">
-      <div class="toggle-group" id="ranking-period-toggle">
-        <button class="active outline" data-period="weekly">1W</button>
-        <button class="outline" data-period="monthly">1M</button>
-        <button class="outline" data-period="quarterly">3M</button>
-        <button class="outline" data-period="semiyearly">6M</button>
+    <article>
+      <h2 id="ranking-title">Ranking by Avg Hourly Rate</h2>
+      <small id="ranking-subtitle" style="color:var(--pico-muted-color);display:block;margin-bottom:0.5rem;"></small>
+      <p style="font-size:0.8rem;color:var(--pico-muted-color);margin-bottom:0.25rem;">📈 Historical trend</p>
+      <div class="chart-box"><canvas id="ranking-chart"></canvas></div>
+      <p style="font-size:0.8rem;color:var(--pico-muted-color);margin-bottom:0.25rem;">🏆 Current period ranking</p>
+      <p id="ranking-period-label" style="font-size:0.75rem;color:var(--pico-muted-color);margin-bottom:0.5rem;"></p>
+      <div class="table-wrap">
+        <table id="ranking-table" class="striped"><tbody><tr><td class="text-center" colspan="5">No data yet</td></tr></tbody></table>
       </div>
-      <article>
-        <h2 id="ranking-title">Ranking by Avg Hourly Rate</h2>
-        <small id="ranking-subtitle" style="color:var(--pico-muted-color);display:block;margin-bottom:0.5rem;"></small>
-        <p style="font-size:0.8rem;color:var(--pico-muted-color);margin-bottom:0.25rem;">📈 Historical trend</p>
-        <div class="chart-box"><canvas id="ranking-chart"></canvas></div>
-        <p style="font-size:0.8rem;color:var(--pico-muted-color);margin-bottom:0.25rem;">🏆 Current period ranking</p>
-        <p id="ranking-period-label" style="font-size:0.75rem;color:var(--pico-muted-color);margin-bottom:0.5rem;"></p>
-        <div class="table-wrap">
-          <table id="ranking-table" class="striped"><tbody><tr><td class="text-center" colspan="5">No data yet</td></tr></tbody></table>
-        </div>
-      </article>
-    </div>
+    </article>
+  </section>
 
-    <!-- Net Income view -->
-    <div id="ranking-income-view" class="hidden">
-      <article>
-        <h2>Ranking by Net Income</h2>
-        <div class="form-row" style="margin-bottom:1rem;">
-          <div class="field">
-            <label>Start</label>
-            <input type="date" id="income-start">
-          </div>
-          <div class="field">
-            <label>End</label>
-            <input type="date" id="income-end">
-          </div>
-          <div class="field field-btn">
-            <label>&nbsp;</label>
-            <button class="primary" onclick="refreshIncomeRanking()">Apply</button>
-          </div>
+  <!-- Net Income -->
+  <section id="view-income" class="view">
+    <article>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:0.5rem;">
+        <h2 style="margin:0;">Net Income Report</h2>
+        <a href="/api/logs/export" class="outline secondary" style="font-size:0.75rem;padding:0.3rem 0.75rem;border-radius:6px;text-decoration:none;">📥 Export CSV</a>
+      </div>
+      <div class="form-row" style="margin-bottom:1rem;">
+        <div class="field">
+          <label>Start</label>
+          <input type="date" id="income-start">
         </div>
-        <div class="table-wrap">
-          <table id="income-ranking-table" class="striped">
-            <thead><tr><th>#</th><th>Clinic</th><th>Hours</th><th>Gross</th><th>Expense</th><th>Net</th><th>Rate</th></tr></thead>
-            <tbody><tr><td class="text-center" colspan="7">Select dates and click Apply</td></tr></tbody>
-          </table>
+        <div class="field">
+          <label>End</label>
+          <input type="date" id="income-end">
         </div>
-      </article>
-    </div>
+        <div class="field field-btn">
+          <label>&nbsp;</label>
+          <button class="primary" onclick="refreshIncomeRanking()">Apply</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table id="income-ranking-table" class="striped">
+          <thead><tr><th>#</th><th>Clinic</th><th>Hours</th><th>Gross</th><th>Expense</th><th>Net</th><th>Rate</th></tr></thead>
+          <tbody><tr><td class="text-center" colspan="7">Select dates and click Apply</td></tr></tbody>
+        </table>
+      </div>
+    </article>
   </section>
 </main>
 

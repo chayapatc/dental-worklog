@@ -79,6 +79,7 @@ document.querySelectorAll("nav [data-view]").forEach(link => {
     if (link.dataset.view === "log") refreshLogView();
     if (link.dataset.view === "clinics") refreshClinics();
     if (link.dataset.view === "ranking") refreshRanking();
+    if (link.dataset.view === "income") setDefaultDates();
   });
 });
 
@@ -89,16 +90,6 @@ document.querySelectorAll(".toggle-group button").forEach(btn => {
     group.querySelectorAll("button").forEach(b => b.classList.remove("active"));
     btn.classList.add("active");
 
-    // View toggle (Hourly Rate / Net Income)
-    if (btn.dataset.rankingView) {
-      const isIncome = btn.dataset.rankingView === "income";
-      document.getElementById("ranking-rate-view").classList.toggle("hidden", isIncome);
-      document.getElementById("ranking-income-view").classList.toggle("hidden", !isIncome);
-      if (isIncome) setDefaultDates();
-      return;
-    }
-
-    // Period toggle (1W/1M/3M/6M)
     const section = group.closest("section");
     if (section && section.id === "view-ranking") refreshRanking();
   });

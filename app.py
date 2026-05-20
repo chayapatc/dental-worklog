@@ -343,6 +343,50 @@ def create_log():
     return jsonify({"id": cur.lastrowid}), 201
 
 
+@app.route("/api/logs/export", methods=["GET"])
+@login_required
+def export_logs():
+    """Export all work logs for the current user as CSV."""
+    import io
+    import csv
+    from flask import Response
+
+    db = get_db()
+    uid = current_user_id()
+
+    rows = db.execute("""
+        SELECT wl.date, c.name AS clinic_name, wl.hours, wl.income, wl.expense,
+               (wl.income - wl.expense) AS net_income
+        FROM work_logs wl
+        JOIN clinics c ON wl.clinic_id = c.id
+        WHERE wl.user_id = ?
+        ORDER BY wl.date DESC
+    """, (uid,)).fetchall()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    # Header row (with UTF-8 BOM for Excel compatibility)
+    output.write('\ufeff')
+    writer.writerow(["Date", "Clinic", "Hours", "Gross Income (฿)", "Expense (฿)", "Net Income (฿)", "Hourly Rate (฿/h)"])
+
+    for r in rows:
+        rate = round(r["net_income"] / r["hours"], 2) if r["hours"] > 0 else 0
+        writer.writerow([
+            r["date"],
+            r["clinic_name"],
+            r["hours"],
+            r["income"],
+            r["expense"],
+            r["net_income"],
+            rate
+        ])
+
+    response = Response(output.getvalue(), mimetype="text/csv")
+    response.headers["Content-Disposition"] = f"attachment; filename=dental_worklog_{datetime.utcnow().strftime('%Y%m%d')}.csv"
+    return response
+
+
 @app.route("/api/logs/<int:log_id>", methods=["DELETE"])
 @login_required
 def delete_log(log_id):
