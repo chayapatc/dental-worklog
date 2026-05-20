@@ -95,17 +95,6 @@ python3 app.py
 # Open http://localhost:5199
 ```
 
-### Production (Google Cloud Always Free)
-```
-VM:     e2-micro, us-central1-a
-IP:     35.253.110.126 (static)
-URL:    https://35-253-110-126.nip.io/
-Server: nginx → gunicorn → Flask
-SSL:    Let's Encrypt via certbot (auto-renews)
-Backup: Daily to GCS bucket (30-day retention)
-Cost:   $0/month
-```
-
 ### Environment
 - `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` — Google OAuth credentials
 - `SECRET_KEY` — Flask session encryption (required for OAuth)
