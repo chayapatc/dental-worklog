@@ -27,6 +27,12 @@ A web app for a dentist to log clinic work hours, income, and expenses, then ran
 - Ranks clinics by total net income within the selected date range
 - Table shows hours, gross income, expense, net income, and net hourly rate per clinic
 
+### Monthly P&amp;L
+- Year selector (current year down to 3 years back)
+- Combo chart: green bars = income, red bars = expense, blue line = net income
+- Shows all 12 months even if zero
+- Summary line with total income, expenses, and net for the year
+
 ### Authentication
 - Sign in with Google account via OAuth 2.0 (OpenID Connect)
 - Each user's clinics and work logs are private and isolated
@@ -77,6 +83,7 @@ No build step, no bundler, no Node.js required.
 | GET | `/api/logs/export` | Export all logs as CSV |
 | GET | `/api/reports/ranking?period=` | Trends data (weekly/monthly/quarterly/semiyearly) |
 | GET | `/api/reports/income-ranking?start=&end=` | Net Income report with date range |
+| GET | `/api/reports/monthly-summary?year=` | Monthly P&amp;L: income, expense, net for 12 months |
 
 All `/api/*` routes require authentication (401 if not logged in).
 
