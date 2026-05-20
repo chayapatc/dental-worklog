@@ -543,7 +543,7 @@ function populateYearSelector() {
   const now = new Date();
   const currentYear = now.getFullYear();
   let html = "";
-  for (let y = currentYear; y >= currentYear - 3; y--) {
+  for (let y = currentYear; y >= currentYear - 9; y--) {
     html += `<option value="${y}" ${y === currentYear ? "selected" : ""}>${y}</option>`;
   }
   sel.innerHTML = html;
@@ -551,7 +551,7 @@ function populateYearSelector() {
 
 async function refreshMonthly() {
   const sel = document.getElementById("monthly-year");
-  if (!sel.value) populateYearSelector();
+  if (sel.options.length === 0) populateYearSelector();
   const year = sel.value || new Date().getFullYear();
 
   try {
