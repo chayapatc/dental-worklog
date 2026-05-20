@@ -66,8 +66,9 @@ function showApp() {
   document.getElementById("app-screen").classList.remove("hidden");
   document.getElementById("user-name").textContent = currentUser.name;
   const av = document.getElementById("user-avatar");
-  if (currentUser.avatar_url) {
-    av.src = currentUser.avatar_url;
+  const avatarUrl = currentUser.avatar_url || "";
+  if (avatarUrl.startsWith("http://") || avatarUrl.startsWith("https://")) {
+    av.src = avatarUrl;
     av.style.display = "";
   } else {
     av.style.display = "none";
