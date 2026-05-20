@@ -145,6 +145,7 @@
       <li><a href="#" data-view="log" class="active">+ Log</a></li>
       <li><a href="#" data-view="clinics">Clinics</a></li>
       <li><a href="#" data-view="trends">Trends</a></li>
+      <li><a href="#" data-view="monthly">Monthly P&amp;L</a></li>
       <li><a href="#" data-view="income">Net Income Report</a></li>
     </ul>
   </nav>
@@ -250,6 +251,20 @@
       <div class="table-wrap">
         <table id="trends-table" class="striped"><tbody><tr><td class="text-center" colspan="5">No data yet</td></tr></tbody></table>
       </div>
+    </article>
+  </section>
+
+  <!-- Monthly Summary (bar chart + line) -->
+  <section id="view-monthly" class="view">
+    <article>
+      <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1rem;flex-wrap:wrap;">
+        <h2 style="margin:0;">Monthly P&amp;L</h2>
+        <div class="field" style="flex:0 0 auto;">
+          <select id="monthly-year" onchange="refreshMonthly()" style="margin-bottom:0;width:auto;"></select>
+        </div>
+      </div>
+      <p id="monthly-totals" style="font-size:0.85rem;color:var(--pico-muted-color);margin-bottom:1rem;"></p>
+      <div class="chart-box" style="height:380px;"><canvas id="monthly-chart"></canvas></div>
     </article>
   </section>
 

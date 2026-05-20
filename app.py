@@ -608,6 +608,39 @@ def income_ranking():
     })
 
 
+# ── Monthly Summary (bar chart + line) ─────────────────────────────────
+@app.route("/api/reports/monthly-summary")
+@login_required
+def monthly_summary():
+    """Return 12 months of income, expense, net for a given year."""
+    year = request.args.get("year", datetime.now(timezone.utc).year, type=int)
+    db = get_db()
+    uid = current_user_id()
+
+    rows = db.execute("""
+        SELECT wl.date, wl.income, wl.expense
+        FROM work_logs wl
+        WHERE wl.user_id = ? AND wl.date >= ? AND wl.date < ?
+    """, (uid, f"{year}-01-01", f"{year + 1}-01-01")).fetchall()
+
+    months = [{"month": m, "income": 0.0, "expense": 0.0, "net": 0.0} for m in range(1, 13)]
+    for r in rows:
+        try:
+            m = int(r["date"].split("-")[1])
+            months[m - 1]["income"] += r["income"]
+            months[m - 1]["expense"] += r["expense"]
+            months[m - 1]["net"] += r["income"] - r["expense"]
+        except (ValueError, IndexError):
+            continue
+
+    month_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    for i, m in enumerate(months):
+        m["label"] = month_names[i]
+
+    return jsonify({"year": year, "months": months})
+
+
 # ── Main ─────────────────────────────────────────────────────────────────
 
 # Initialize DB on import (for WSGI/production) — idempotent, safe to call repeatedly

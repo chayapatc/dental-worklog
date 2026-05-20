@@ -3,6 +3,7 @@
 let clinicsCache = [];
 let logsCache = [];
 let trendsChart = null;
+let monthlyChart = null;
 let currentUser = null;
 
 // HTML Escaping Utility to prevent XSS
@@ -92,6 +93,7 @@ document.querySelectorAll("nav [data-view]").forEach(link => {
     if (link.dataset.view === "log") refreshLogView();
     if (link.dataset.view === "clinics") refreshClinics();
     if (link.dataset.view === "trends") refreshTrends();
+    if (link.dataset.view === "monthly") refreshMonthly();
     if (link.dataset.view === "income") setDefaultDates();
   });
 });
@@ -533,6 +535,111 @@ async function refreshIncomeRanking() {
     toast(e.message, true);
   }
 }
+
+
+// ── Monthly Summary (bar chart + line) ──────────────────────────────────
+function populateYearSelector() {
+  const sel = document.getElementById("monthly-year");
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  let html = "";
+  for (let y = currentYear; y >= currentYear - 3; y--) {
+    html += `<option value="${y}" ${y === currentYear ? "selected" : ""}>${y}</option>`;
+  }
+  sel.innerHTML = html;
+}
+
+async function refreshMonthly() {
+  const sel = document.getElementById("monthly-year");
+  if (!sel.value) populateYearSelector();
+  const year = sel.value || new Date().getFullYear();
+
+  try {
+    const data = await api(`/api/reports/monthly-summary?year=${year}`);
+    const months = data.months;
+
+    let totalIncome = 0, totalExpense = 0, totalNet = 0;
+    months.forEach(m => {
+      totalIncome += m.income;
+      totalExpense += m.expense;
+      totalNet += m.net;
+    });
+    document.getElementById("monthly-totals").innerHTML =
+      `Total income: ฿${totalIncome.toLocaleString()} &nbsp;|&nbsp; Expenses: ฿${totalExpense.toLocaleString()} &nbsp;|&nbsp; Net: <strong>฿${totalNet.toLocaleString()}</strong>`;
+
+    const labels = months.map(m => m.label);
+    const incomeData = months.map(m => m.income);
+    const expenseData = months.map(m => m.expense);
+    const netData = months.map(m => m.net);
+
+    if (monthlyChart) monthlyChart.destroy();
+    const ctx = document.getElementById("monthly-chart").getContext("2d");
+    monthlyChart = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels,
+        datasets: [
+          {
+            label: "Income",
+            data: incomeData,
+            backgroundColor: "#4ade80cc",
+            borderColor: "#4ade80",
+            borderWidth: 1,
+            borderRadius: 3,
+            order: 1,
+          },
+          {
+            label: "Expense",
+            data: expenseData,
+            backgroundColor: "#f87171cc",
+            borderColor: "#f87171",
+            borderWidth: 1,
+            borderRadius: 3,
+            order: 1,
+          },
+          {
+            label: "Net",
+            data: netData,
+            type: "line",
+            borderColor: "#38bdf8",
+            backgroundColor: "transparent",
+            borderWidth: 2.5,
+            pointRadius: 4,
+            pointBackgroundColor: "#38bdf8",
+            tension: 0.3,
+            order: 0,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: "index", intersect: false },
+        plugins: {
+          legend: { labels: { color: "#94a3b8", boxWidth: 12, padding: 12 } },
+          tooltip: {
+            callbacks: {
+              label: ctx => `${ctx.dataset.label}: ฿${ctx.raw.toLocaleString()}`,
+            },
+          },
+        },
+        scales: {
+          x: {
+            ticks: { color: "#64748b" },
+            grid: { color: "rgba(255,255,255,0.06)" },
+          },
+          y: {
+            ticks: { color: "#64748b", callback: v => "฿" + v.toLocaleString() },
+            grid: { color: "rgba(255,255,255,0.06)" },
+          },
+        },
+      },
+    });
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
 
 // ── Init ────────────────────────────────────────────────────────────────
 checkAuth();
