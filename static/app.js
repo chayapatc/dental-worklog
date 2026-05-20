@@ -1,7 +1,7 @@
 // Dental Worklog — Frontend Logic (Pico CSS + auth)
 
 let clinicsCache = [];
-let rankingChart = null;
+let trendsChart = null;
 let currentUser = null;
 
 // ── Color Presets ───────────────────────────────────────────────────────
@@ -78,12 +78,12 @@ document.querySelectorAll("nav [data-view]").forEach(link => {
     document.getElementById("view-" + link.dataset.view).classList.add("active");
     if (link.dataset.view === "log") refreshLogView();
     if (link.dataset.view === "clinics") refreshClinics();
-    if (link.dataset.view === "ranking") refreshRanking();
+    if (link.dataset.view === "trends") refreshTrends();
     if (link.dataset.view === "income") setDefaultDates();
   });
 });
 
-// ── Period Toggles ─────────────────────────────────────────────────────
+// ── Period & Metric Toggles ─────────────────────────────────────────────
 document.querySelectorAll(".toggle-group button").forEach(btn => {
   btn.addEventListener("click", () => {
     const group = btn.parentElement;
@@ -91,7 +91,7 @@ document.querySelectorAll(".toggle-group button").forEach(btn => {
     btn.classList.add("active");
 
     const section = group.closest("section");
-    if (section && section.id === "view-ranking") refreshRanking();
+    if (section && section.id === "view-trends") refreshTrends();
   });
 });
 
@@ -371,10 +371,15 @@ async function submitLog() {
   }
 }
 
-// ── Ranking View ───────────────────────────────────────────────────────
-function getActivePeriod(sectionId) {
-  const btn = document.querySelector("#" + sectionId + " .toggle-group button.active");
+// ── Trends View (merged Rate + Net Income) ──────────────────────────────
+function getActivePeriod() {
+  const btn = document.querySelector("#ranking-period-toggle button.active");
   return btn ? btn.dataset.period : "weekly";
+}
+
+function getActiveMetric() {
+  const btn = document.querySelector("[data-trends-metric].active");
+  return btn ? btn.dataset.trendsMetric : "rate";
 }
 
 function rateClass(rate) {
@@ -383,18 +388,21 @@ function rateClass(rate) {
   return "rate-bad";
 }
 
-async function refreshRanking() {
-  const period = getActivePeriod("view-ranking");
+async function refreshTrends() {
+  const period = getActivePeriod();
+  const metric = getActiveMetric();
   const periodLabels = { weekly: "week", monthly: "month", quarterly: "quarter", semiyearly: "half-year" };
   const periodLabel = periodLabels[period] || "week";
-  document.getElementById("ranking-title").textContent = "Ranking by Avg Hourly Rate";
-  document.getElementById("ranking-subtitle").textContent = `Grouped by ${periodLabel}`;
+
+  const isRate = metric === "rate";
+  document.getElementById("trends-title").textContent = isRate ? "Hourly Rate Trends" : "Net Income Trends";
+  document.getElementById("trends-subtitle").textContent = `Grouped by ${periodLabel}`;
 
   try {
     const data = await api(`/api/reports/ranking?period=${period}`);
 
-    const tbody = document.querySelector("#ranking-table tbody");
-    const labelEl = document.getElementById("ranking-period-label");
+    const tbody = document.querySelector("#trends-table tbody");
+    const labelEl = document.getElementById("trends-period-label");
 
     if (data.length === 0) {
       tbody.innerHTML = '<tr><td class="text-center" colspan="5">No data yet — log some work hours first</td></tr>';
@@ -403,32 +411,37 @@ async function refreshRanking() {
       const periods = [...new Set(data.map(d => d.period))].sort().reverse();
       const latestPeriod = periods[0];
 
-      // Format the period label
       if (period === "weekly") {
         labelEl.textContent = `Week of ${latestPeriod}`;
-      } else if (period === "quarterly" || period === "semiyearly") {
-        labelEl.textContent = `${latestPeriod}`;
       } else {
         labelEl.textContent = `${latestPeriod}`;
       }
 
       const latest = data.filter(d => d.period === latestPeriod);
-      const ranked = latest.sort((a, b) => b.hourly_rate - a.hourly_rate);
+      let ranked;
+      if (isRate) {
+        ranked = latest.sort((a, b) => b.hourly_rate - a.hourly_rate);
+      } else {
+        ranked = latest.sort((a, b) => (b.net_income || 0) - (a.net_income || 0));
+      }
       tbody.innerHTML = ranked.map((d, i) => {
-        const net = d.total_income - (d.total_expense || 0);
+        const value = isRate ? d.hourly_rate : (d.net_income || 0);
+        const valueStr = isRate
+          ? `฿${d.hourly_rate}/h`
+          : `฿${value.toLocaleString()}`;
         return `<tr>
           <td class="rank">#${i + 1}</td>
           <td>${d.clinic_name}</td>
           <td>${d.total_hours.toFixed(1)}h</td>
-          <td style="text-align:right">฿${net.toLocaleString()}</td>
+          <td style="text-align:right">${valueStr}</td>
           <td style="text-align:right" class="${rateClass(d.hourly_rate)}">฿${d.hourly_rate}/h</td>
         </tr>`;
       }).join("");
     }
 
     // Chart
-    if (rankingChart) rankingChart.destroy();
-    const ctx = document.getElementById("ranking-chart").getContext("2d");
+    if (trendsChart) trendsChart.destroy();
+    const ctx = document.getElementById("trends-chart").getContext("2d");
     const allClinics = [...new Set(data.map(d => d.clinic_name))];
     const allPeriods = [...new Set(data.map(d => d.period))].sort().slice(-12);
     const datasets = allClinics.map(name => {
@@ -437,14 +450,15 @@ async function refreshRanking() {
         label: name,
         data: allPeriods.map(p => {
           const entry = data.find(d => d.clinic_name === name && d.period === p);
-          return entry ? entry.hourly_rate : null;
+          if (!entry) return null;
+          return isRate ? entry.hourly_rate : (entry.net_income || 0);
         }),
         borderColor: clinicColor,
         backgroundColor: clinicColor + "20",
         tension: 0.3, spanGaps: true,
       };
     });
-    rankingChart = new Chart(ctx, {
+    trendsChart = new Chart(ctx, {
       type: "line", data: { labels: allPeriods, datasets },
       options: {
         responsive: true, maintainAspectRatio: false,
@@ -460,9 +474,8 @@ async function refreshRanking() {
   }
 }
 
-// ── Income Ranking ──────────────────────────────────────────────────────
+// ── Income Report ──────────────────────────────────────────────────────
 function setDefaultDates() {
-  // Use local date (not UTC) to respect user's timezone
   const now = new Date();
   const yyyy = now.getFullYear();
   const mm = String(now.getMonth() + 1).padStart(2, '0');

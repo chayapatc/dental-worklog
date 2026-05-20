@@ -144,7 +144,7 @@
     <ul>
       <li><a href="#" data-view="log" class="active">+ Log</a></li>
       <li><a href="#" data-view="clinics">Clinics</a></li>
-      <li><a href="#" data-view="ranking">Rate Ranking</a></li>
+      <li><a href="#" data-view="trends">Trends</a></li>
       <li><a href="#" data-view="income">Net Income Report</a></li>
     </ul>
   </nav>
@@ -226,8 +226,14 @@
     </article>
   </section>
 
-  <!-- Ranking -->
-  <section id="view-ranking" class="view">
+  <!-- Trends (merged Rate + Income Ranking) -->
+  <section id="view-trends" class="view">
+    <!-- Metric toggle -->
+    <div class="toggle-group" style="margin-bottom:0.75rem;">
+      <button class="active outline" data-trends-metric="rate">Hourly Rate</button>
+      <button class="outline" data-trends-metric="net">Net Income</button>
+    </div>
+    <!-- Period toggle -->
     <div class="toggle-group" id="ranking-period-toggle">
       <button class="active outline" data-period="weekly">1W</button>
       <button class="outline" data-period="monthly">1M</button>
@@ -235,14 +241,14 @@
       <button class="outline" data-period="semiyearly">6M</button>
     </div>
     <article>
-      <h2 id="ranking-title">Ranking by Avg Hourly Rate</h2>
-      <small id="ranking-subtitle" style="color:var(--pico-muted-color);display:block;margin-bottom:0.5rem;"></small>
+      <h2 id="trends-title">Hourly Rate Trends</h2>
+      <small id="trends-subtitle" style="color:var(--pico-muted-color);display:block;margin-bottom:0.5rem;"></small>
       <p style="font-size:0.8rem;color:var(--pico-muted-color);margin-bottom:0.25rem;">📈 Historical trend</p>
-      <div class="chart-box"><canvas id="ranking-chart"></canvas></div>
-      <p style="font-size:0.8rem;color:var(--pico-muted-color);margin-bottom:0.25rem;">🏆 Current period ranking</p>
-      <p id="ranking-period-label" style="font-size:0.75rem;color:var(--pico-muted-color);margin-bottom:0.5rem;"></p>
+      <div class="chart-box"><canvas id="trends-chart"></canvas></div>
+      <p style="font-size:0.8rem;color:var(--pico-muted-color);margin-bottom:0.25rem;">🏆 Current period</p>
+      <p id="trends-period-label" style="font-size:0.75rem;color:var(--pico-muted-color);margin-bottom:0.5rem;"></p>
       <div class="table-wrap">
-        <table id="ranking-table" class="striped"><tbody><tr><td class="text-center" colspan="5">No data yet</td></tr></tbody></table>
+        <table id="trends-table" class="striped"><tbody><tr><td class="text-center" colspan="5">No data yet</td></tr></tbody></table>
       </div>
     </article>
   </section>

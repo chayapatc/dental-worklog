@@ -484,6 +484,7 @@ def ranking_report():
         net = g["total_income"] - g["total_expense"]
         rate = round(net / g["total_hours"], 2) if g["total_hours"] > 0 else 0
         g["hourly_rate"] = rate
+        g["net_income"] = net
         result.append(g)
 
     result.sort(key=lambda x: (x["period"], -x["hourly_rate"]), reverse=True)
