@@ -6,22 +6,24 @@ A web app for a dentist to log clinic work hours, income, and expenses, then ran
 
 ### Clinics
 - Create, edit, and soft-delete dental clinics
-- Assign a color to each clinic (used in ranking charts)
+- Assign a color to each clinic (used in charts)
 - Soft-delete: hides clinic from lists but preserves existing work logs
 
 ### Work Logs
 - Log work sessions: clinic, date, hours, income, and expense (lab fees, materials)
 - Hard-delete individual log entries with confirmation dialog
-- Paginated recent entries table (20 per page) showing gross, expense, and net hourly rate
+- Paginated recent entries (20 per page) showing gross, expense, and net hourly rate
+- Export all logs as CSV with one click
 
-### Ranking — Hourly Rate
-- Toggle between **1W** (weekly), **1M** (monthly), **3M** (quarterly), and **6M** (half-year) periods
-- Line chart showing historical net hourly-rate trends per clinic (color-coded)
-- Ranked table of the current period, sorted by average net hourly rate
-- Hourly rate calculated as (total income − total expense) / total hours
+### Trends (merged Rate + Income Ranking)
+- Metric toggle: **Hourly Rate** or **Net Income**
+- Period toggle: **1W** (weekly), **1M** (monthly), **3M** (quarterly), **6M** (half-year)
+- Line chart showing historical trends per clinic (color-coded)
+- Ranked table of the current period, sorted by the selected metric
+- Hourly rate = (total income − total expense) / total hours
 
 ### Net Income Report
-- Date range picker with month-to-date default
+- Custom date range picker with month-to-date default
 - Ranks clinics by total net income within the selected date range
 - Table shows hours, gross income, expense, net income, and net hourly rate per clinic
 
@@ -72,7 +74,8 @@ No build step, no bundler, no Node.js required.
 | GET | `/api/logs?page=&per_page=` | Paginated work logs (20 per page) |
 | POST | `/api/logs` | Create work log (clinic, date, hours, income, expense) |
 | DELETE | `/api/logs/:id` | Hard-delete work log entry |
-| GET | `/api/reports/ranking?period=` | Hourly rate ranking (weekly/monthly/quarterly/semiyearly) |
+| GET | `/api/logs/export` | Export all logs as CSV |
+| GET | `/api/reports/ranking?period=` | Trends data (weekly/monthly/quarterly/semiyearly) |
 | GET | `/api/reports/income-ranking?start=&end=` | Net Income report with date range |
 
 All `/api/*` routes require authentication (401 if not logged in).
