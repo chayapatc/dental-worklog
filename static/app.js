@@ -337,7 +337,7 @@ async function refreshRecentLogs() {
         <td>${l.hours}h</td>
         <td style="text-align:right">฿${l.income.toLocaleString()}</td>
         <td style="text-align:right">${l.expense > 0 ? '-฿' + l.expense.toLocaleString() : '-'}</td>
-        <td style="text-align:right" class="rate-good">฿${Math.round((l.income - l.expense)/l.hours)}/h</td>
+        <td style="text-align:right" class="${l.hours > 0 ? 'rate-good' : ''}">${l.hours > 0 ? '฿' + Math.round((l.income - l.expense)/l.hours) + '/h' : '-'}</td>
         <td style="text-align:center;">
           <button class="outline contrast" style="padding:0.1rem 0.4rem;font-size:0.7rem;" onclick="confirmDeleteLog(${l.id})" title="Delete">✕</button>
         </td>
@@ -367,8 +367,8 @@ async function submitLog() {
   const income = document.getElementById("log-income").value;
   const expense = document.getElementById("log-expense").value || 0;
 
-  if (!clinicId || !date || !hours || !income) {
-    return toast("Fill all fields", true);
+  if (!clinicId || !date || !income) {
+    return toast("Fill all required fields (clinic, date, income)", true);
   }
 
   try {
@@ -377,12 +377,12 @@ async function submitLog() {
       body: JSON.stringify({
         clinic_id: parseInt(clinicId),
         date,
-        hours: parseFloat(hours),
+        hours: parseFloat(hours) || 0,
         income: parseFloat(income),
         expense: parseFloat(expense),
       }),
     });
-    document.getElementById("log-hours").value = "";
+    document.getElementById("log-hours").value = "0";
     document.getElementById("log-income").value = "";
     toast("Work log saved!");
     currentPage = 1;

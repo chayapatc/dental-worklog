@@ -335,8 +335,8 @@ def create_log():
         errors.append("clinic_id is required")
     if not date:
         errors.append("date is required")
-    if hours is None or hours <= 0:
-        errors.append("hours must be > 0")
+    if hours is None or hours < 0:
+        errors.append("hours must be >= 0")
     if income is None or income < 0:
         errors.append("income must be >= 0")
     if expense is None or expense < 0:
@@ -355,9 +355,10 @@ def create_log():
     if not clinic:
         return jsonify({"error": "Clinic not found or does not belong to user"}), 403
 
+    hours_val = float(hours) if hours else 0.0
     cur = db.execute(
         "INSERT INTO work_logs (user_id, clinic_id, date, hours, income, expense) VALUES (?,?,?,?,?,?)",
-        (uid, int(clinic_id), date, float(hours), float(income), float(expense)),
+        (uid, int(clinic_id), date, hours_val, float(income), float(expense)),
     )
     db.commit()
     return jsonify({"id": cur.lastrowid}), 201
