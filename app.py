@@ -11,11 +11,22 @@ from pathlib import Path
 from dotenv import load_dotenv
 from flask import Flask, g, jsonify, redirect, request, render_template, session, url_for
 from authlib.integrations.flask_client import OAuth
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 load_dotenv()  # load .env file into os.environ
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", secrets.token_hex(32))
+
+# Trust proxy headers (Nginx terminates SSL)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+
+# Secure session cookies (Secure in prod, Lax SameSite to protect against CSRF)
+app.config.update(
+    SESSION_COOKIE_SECURE=not app.debug,
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+)
 DATABASE = "dental.db"
 
 # ── OAuth Config ─────────────────────────────────────────────────────────
@@ -335,6 +346,15 @@ def create_log():
 
     db = get_db()
     uid = current_user_id()
+
+    # Verify that the clinic exists, belongs to the current user, and is not deleted
+    clinic = db.execute(
+        "SELECT id FROM clinics WHERE id=? AND user_id=? AND deleted=0",
+        (int(clinic_id), uid)
+    ).fetchone()
+    if not clinic:
+        return jsonify({"error": "Clinic not found or does not belong to user"}), 403
+
     cur = db.execute(
         "INSERT INTO work_logs (user_id, clinic_id, date, hours, income, expense) VALUES (?,?,?,?,?,?)",
         (uid, int(clinic_id), date, float(hours), float(income), float(expense)),

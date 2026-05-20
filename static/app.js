@@ -1,8 +1,20 @@
 // Dental Worklog — Frontend Logic (Pico CSS + auth)
 
 let clinicsCache = [];
+let logsCache = [];
 let trendsChart = null;
 let currentUser = null;
+
+// HTML Escaping Utility to prevent XSS
+function escapeHtml(str) {
+  if (str === null || str === undefined) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
 
 // ── Color Presets ───────────────────────────────────────────────────────
 const COLOR_PRESETS = [
@@ -128,7 +140,7 @@ function populateClinicSelect() {
   const sel = document.getElementById("log-clinic");
   sel.innerHTML = '<option value="">-- Select --</option>';
   clinicsCache.forEach(c => {
-    sel.innerHTML += `<option value="${c.id}">${c.name}</option>`;
+    sel.innerHTML += `<option value="${c.id}">${escapeHtml(c.name)}</option>`;
   });
 }
 
@@ -147,7 +159,7 @@ async function refreshClinics() {
     if (editingClinicId === c.id) {
       return `<tr>
         <td>
-          <input type="text" id="edit-name-${c.id}" value="${c.name.replace(/"/g, '&quot;')}" style="width:100%;margin-bottom:0.3rem;">
+          <input type="text" id="edit-name-${c.id}" value="${escapeHtml(c.name)}" style="width:100%;margin-bottom:0.3rem;">
           <div class="edit-swatches-${c.id}" style="display:flex;gap:0.2rem;">${buildColorSwatchesForEdit(c.id, c.color)}</div>
         </td>
         <td style="text-align:right;white-space:nowrap;">
@@ -157,10 +169,10 @@ async function refreshClinics() {
       </tr>`;
     }
     return `<tr>
-      <td>${dot}${c.name}</td>
+      <td>${dot}${escapeHtml(c.name)}</td>
       <td style="text-align:right;white-space:nowrap;">
-        <button class="outline secondary" style="padding:0.2rem 0.5rem;font-size:0.75rem;" onclick="startEdit(${c.id}, '${c.name.replace(/'/g, "\\'")}', '${c.color}')">Edit</button>
-        <button class="outline contrast" style="padding:0.2rem 0.5rem;font-size:0.75rem;" onclick="confirmDelete(${c.id}, '${c.name.replace(/'/g, "\\'")}')">Delete</button>
+        <button class="outline secondary" style="padding:0.2rem 0.5rem;font-size:0.75rem;" onclick="startEdit(${c.id})">Edit</button>
+        <button class="outline contrast" style="padding:0.2rem 0.5rem;font-size:0.75rem;" onclick="confirmDelete(${c.id})">Delete</button>
       </td>
     </tr>`;
   }).join("");
@@ -183,9 +195,10 @@ function selectEditColor(clinicId, color) {
   document.querySelector(`.edit-swatches-${clinicId}`).innerHTML = buildColorSwatchesForEdit(clinicId, color);
 }
 
-function startEdit(id, name, color) {
+function startEdit(id) {
+  const clinic = clinicsCache.find(x => x.id === id);
   editingClinicId = id;
-  editingColor = color;
+  editingColor = clinic ? clinic.color : COLOR_PRESETS[0];
   refreshClinics();
   setTimeout(() => {
     const inp = document.getElementById(`edit-name-${id}`);
@@ -238,7 +251,9 @@ async function addClinic() {
 let pendingDeleteId = null;
 let pendingDeleteType = null;  // "clinic" or "log"
 
-function confirmDelete(id, name) {
+function confirmDelete(id) {
+  const clinic = clinicsCache.find(x => x.id === id);
+  const name = clinic ? clinic.name : "";
   pendingDeleteId = id;
   pendingDeleteType = "clinic";
   document.getElementById("confirm-title").textContent = "Delete Clinic";
@@ -247,11 +262,13 @@ function confirmDelete(id, name) {
   document.getElementById("confirm-dialog").showModal();
 }
 
-function confirmDeleteLog(id, date, clinic) {
+function confirmDeleteLog(id) {
+  const log = logsCache.find(x => x.id === id);
+  if (!log) return;
   pendingDeleteId = id;
   pendingDeleteType = "log";
   document.getElementById("confirm-title").textContent = "Delete Log Entry";
-  document.getElementById("confirm-message").textContent = `Delete entry: ${date} at ${clinic}? This cannot be undone.`;
+  document.getElementById("confirm-message").textContent = `Delete entry: ${log.date} at ${log.clinic_name}? This cannot be undone.`;
   document.getElementById("confirm-btn").textContent = "Delete";
   document.getElementById("confirm-dialog").showModal();
 }
@@ -303,6 +320,7 @@ async function refreshRecentLogs() {
   try {
     const result = await api(`/api/logs?page=${currentPage}&per_page=${PER_PAGE}`);
     const { logs, page, total_pages, total } = result;
+    logsCache = logs;
 
     if (logs.length === 0) {
       tbody.innerHTML = '<tr><td class="text-center" colspan="7">No entries yet</td></tr>';
@@ -312,13 +330,13 @@ async function refreshRecentLogs() {
     tbody.innerHTML = logs.map(l =>
       `<tr>
         <td>${l.date}</td>
-        <td>${l.clinic_name}</td>
+        <td>${escapeHtml(l.clinic_name)}</td>
         <td>${l.hours}h</td>
         <td style="text-align:right">฿${l.income.toLocaleString()}</td>
         <td style="text-align:right">${l.expense > 0 ? '-฿' + l.expense.toLocaleString() : '-'}</td>
         <td style="text-align:right" class="rate-good">฿${Math.round((l.income - l.expense)/l.hours)}/h</td>
         <td style="text-align:center;">
-          <button class="outline contrast" style="padding:0.1rem 0.4rem;font-size:0.7rem;" onclick="confirmDeleteLog(${l.id}, '${l.date}', '${l.clinic_name.replace(/'/g, "\\'")}')" title="Delete">✕</button>
+          <button class="outline contrast" style="padding:0.1rem 0.4rem;font-size:0.7rem;" onclick="confirmDeleteLog(${l.id})" title="Delete">✕</button>
         </td>
       </tr>`
     ).join("");
@@ -431,7 +449,7 @@ async function refreshTrends() {
           : `฿${value.toLocaleString()}`;
         return `<tr>
           <td class="rank">#${i + 1}</td>
-          <td>${d.clinic_name}</td>
+          <td>${escapeHtml(d.clinic_name)}</td>
           <td>${d.total_hours.toFixed(1)}h</td>
           <td style="text-align:right">${valueStr}</td>
           <td style="text-align:right" class="${rateClass(d.hourly_rate)}">฿${d.hourly_rate}/h</td>
@@ -502,7 +520,7 @@ async function refreshIncomeRanking() {
     tbody.innerHTML = rankings.map((d, i) =>
       `<tr>
         <td class="rank">#${i + 1}</td>
-        <td>${d.clinic_name}</td>
+        <td>${escapeHtml(d.clinic_name)}</td>
         <td>${d.total_hours.toFixed(1)}h</td>
         <td style="text-align:right">฿${d.total_income.toLocaleString()}</td>
         <td style="text-align:right">${d.total_expense > 0 ? '-฿' + d.total_expense.toLocaleString() : '-'}</td>
