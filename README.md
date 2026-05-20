@@ -6,7 +6,7 @@ A web app for a dentist to log clinic work hours, income, and expenses, then ran
 
 ### Clinics
 - Create, edit, and soft-delete dental clinics
-- Assign a color to each clinic (used in charts)
+- Assign a color to each clinic via preset swatches or custom color picker
 - Soft-delete: hides clinic from lists but preserves existing work logs
 
 ### Work Logs

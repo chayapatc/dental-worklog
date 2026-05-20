@@ -37,7 +37,13 @@ function buildColorSwatches(currentColor) {
 
 function selectColor(color) {
   selectedColor = color;
+  document.getElementById("clinic-color-picker").value = color;
   document.getElementById("color-swatches").innerHTML = buildColorSwatches(color);
+}
+
+function selectCustomColor(color) {
+  selectedColor = color;
+  document.getElementById("color-swatches").innerHTML = buildColorSwatches(null);
 }
 
 // ── Auth Bootstrap ──────────────────────────────────────────────────────
@@ -76,6 +82,7 @@ function showApp() {
   }
   // Initialize color swatches on add clinic form
   document.getElementById("color-swatches").innerHTML = buildColorSwatches(COLOR_PRESETS[0]);
+  document.getElementById("clinic-color-picker").value = COLOR_PRESETS[0];
 }
 
 function logout() {
@@ -163,7 +170,8 @@ async function refreshClinics() {
       return `<tr>
         <td>
           <input type="text" id="edit-name-${c.id}" value="${escapeHtml(c.name)}" style="width:100%;margin-bottom:0.3rem;">
-          <div class="edit-swatches-${c.id}" style="display:flex;gap:0.2rem;">${buildColorSwatchesForEdit(c.id, c.color)}</div>
+          <div class="edit-swatches-${c.id}" style="display:flex;gap:0.2rem;align-items:center;">${buildColorSwatchesForEdit(c.id, c.color)}</div>
+          <input type="color" id="edit-color-picker-${c.id}" value="${c.color}" onchange="selectEditCustomColor(${c.id}, this.value)" style="width:28px;height:28px;padding:0;border:none;cursor:pointer;margin-top:0.2rem;" title="Custom color">
         </td>
         <td style="text-align:right;white-space:nowrap;">
           <button class="outline secondary" style="padding:0.2rem 0.5rem;font-size:0.75rem;" onclick="saveEdit(${c.id})">Save</button>
@@ -195,7 +203,13 @@ function buildColorSwatchesForEdit(clinicId, currentColor) {
 
 function selectEditColor(clinicId, color) {
   editingColor = color;
+  document.getElementById(`edit-color-picker-${clinicId}`).value = color;
   document.querySelector(`.edit-swatches-${clinicId}`).innerHTML = buildColorSwatchesForEdit(clinicId, color);
+}
+
+function selectEditCustomColor(clinicId, color) {
+  editingColor = color;
+  document.querySelector(`.edit-swatches-${clinicId}`).innerHTML = buildColorSwatchesForEdit(clinicId, null);
 }
 
 function startEdit(id) {
@@ -240,6 +254,7 @@ async function addClinic() {
     await api("/api/clinics", { method: "POST", body: JSON.stringify({ name, color: selectedColor }) });
     input.value = "";
     selectedColor = COLOR_PRESETS[0];
+    document.getElementById("clinic-color-picker").value = COLOR_PRESETS[0];
     document.getElementById("color-swatches").innerHTML = buildColorSwatches(COLOR_PRESETS[0]);
     toast("Clinic added!");
     await refreshClinics();
