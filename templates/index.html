@@ -104,12 +104,19 @@
   .hidden { display: none !important; }
   .text-center { text-align: center; }
 
+  /* ── Mobile nav ──────────────────────────────────────────────────── */
+  #main-nav.mobile-open { display: block !important; position: absolute; top: 100%; left: 0; z-index: 50; }
+  #main-nav.mobile-open ul { flex-direction: column; background: var(--pico-card-background-color); border: 1px solid var(--pico-card-border-color); border-radius: 6px; padding: 0.25rem; min-width: 180px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+  #main-nav.mobile-open a { display: block; padding: 0.5rem 0.75rem; border-radius: 4px; }
+  #main-nav.mobile-open a:hover { background: var(--pico-primary-background); color: var(--pico-primary-inverse); }
   /* ── Mobile tweaks ──────────────────────────────────────────────── */
   @media (max-width: 600px) {
-    .app-header { padding: 0.5rem; gap: 0.5rem; }
+    .app-header { padding: 0.5rem; gap: 0.5rem; position: relative; }
     .app-header h1 { font-size: 0.95rem; }
     .logo-text { display: none; }
     .app-header nav a { padding: 0.3rem 0.5rem; font-size: 0.78rem; }
+    #menu-toggle { display: inline-block !important; }
+    #main-nav:not(.mobile-open) { display: none; }
     .user-area .user-name { display: none; }
     .user-area .logout-btn { font-size: 0.7rem; padding: 0.2rem 0.5rem; }
     .form-row { gap: 0.5rem; }
@@ -119,6 +126,9 @@
     table { font-size: 0.8rem; }
     th, td { padding: 0.4rem 0.5rem; }
     .toast { left: 0.75rem; right: 0.75rem; bottom: 1rem; max-width: none; margin: 0; }
+    #tracker-calendar { font-size: 0.6rem; gap: 1px; }
+    #tracker-calendar > div { min-height: 48px !important; padding: 2px !important; }
+    #tracker-calendar > div :first-child { font-size: 0.6rem; }
   }
 </style>
 </head>
@@ -140,10 +150,12 @@
 
 <header class="app-header">
   <h1>🦷 <span class="logo-text">Dental Worklog</span></h1>
-  <nav>
+  <button id="menu-toggle" class="outline secondary" style="display:none;padding:0.25rem 0.5rem;font-size:1rem;line-height:1;" aria-label="Menu">☰</button>
+  <nav id="main-nav">
     <ul>
       <li><a href="#" data-view="log" class="active">+ Log</a></li>
       <li><a href="#" data-view="clinics">Clinics</a></li>
+      <li><a href="#" data-view="tracker">Tracker</a></li>
       <li><a href="#" data-view="trends">Trends</a></li>
       <li><a href="#" data-view="monthly">Monthly P&amp;L</a></li>
       <li><a href="#" data-view="income">Net Income Report</a></li>
@@ -224,6 +236,22 @@
       <h2>All Clinics</h2>
       <div class="table-wrap">
         <table id="clinics-table" class="striped"><tbody><tr><td class="text-center" colspan="2">No clinics yet</td></tr></tbody></table>
+      </div>
+    </article>
+  </section>
+
+  <!-- Tracker (monthly calendar) -->
+  <section id="view-tracker" class="view">
+    <article>
+      <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1rem;flex-wrap:wrap;">
+        <h2 style="margin:0;">Tracker</h2>
+        <div class="field" style="flex:0 0 auto;"><button class="outline secondary" onclick="navTrackerMonth(-1)" style="padding:0.2rem 0.6rem;margin-bottom:0;">←</button></div>
+        <div class="field" style="flex:0 0 auto;"><span id="tracker-month-label" style="font-weight:600;"></span></div>
+        <div class="field" style="flex:0 0 auto;"><button class="outline secondary" onclick="navTrackerMonth(1)" style="padding:0.2rem 0.6rem;margin-bottom:0;">→</button></div>
+      </div>
+      <div id="tracker-calendar" style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;"></div>
+      <div style="margin-top:0.75rem;display:flex;gap:1rem;flex-wrap:wrap;font-size:0.75rem;color:var(--pico-muted-color);">
+        <span>⬤ Clinic log</span><span style="padding-left:4px;border-left:2px solid #f87171;font-size:0.65rem;">Event</span>
       </div>
     </article>
   </section>

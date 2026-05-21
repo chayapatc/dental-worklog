@@ -15,6 +15,10 @@ A web app for a dentist to log clinic work hours, income, and expenses, then ran
 - Paginated recent entries (20 per page) showing gross, expense, and net hourly rate
 - Export all logs as CSV with one click
 
+### Tracker
+- Show a monthly calendar, each day show `count` of worklog on that day.
+- Link with user's google calendar to show events are on that day.
+
 ### Trends (merged Rate + Income Ranking)
 - Metric toggle: **Hourly Rate** or **Net Income**
 - Period toggle: **1W** (weekly), **1M** (monthly), **3M** (quarterly), **6M** (half-year)

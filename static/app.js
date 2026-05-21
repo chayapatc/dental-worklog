@@ -99,10 +99,18 @@ document.querySelectorAll("nav [data-view]").forEach(link => {
     document.getElementById("view-" + link.dataset.view).classList.add("active");
     if (link.dataset.view === "log") refreshLogView();
     if (link.dataset.view === "clinics") refreshClinics();
+    if (link.dataset.view === "tracker") refreshTracker();
     if (link.dataset.view === "trends") refreshTrends();
     if (link.dataset.view === "monthly") refreshMonthly();
     if (link.dataset.view === "income") setDefaultDates();
+    // Close mobile menu after selecting
+    document.getElementById("main-nav").classList.remove("mobile-open");
   });
+});
+
+// Hamburger menu toggle
+document.getElementById("menu-toggle").addEventListener("click", () => {
+  document.getElementById("main-nav").classList.toggle("mobile-open");
 });
 
 // ── Period & Metric Toggles ─────────────────────────────────────────────
@@ -650,6 +658,98 @@ async function refreshMonthly() {
         },
       },
     });
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+
+// ── Tracker (monthly calendar) ──────────────────────────────────────────
+let trackerYear = new Date().getFullYear();
+let trackerMonth = new Date().getMonth() + 1;
+
+function navTrackerMonth(delta) {
+  trackerMonth += delta;
+  if (trackerMonth > 12) { trackerMonth = 1; trackerYear++; }
+  if (trackerMonth < 1) { trackerMonth = 12; trackerYear--; }
+  refreshTracker();
+}
+
+function fmtDate(y, m, d) {
+  return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+}
+
+async function refreshTracker() {
+  const monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  document.getElementById("tracker-month-label").textContent = `${monthNames[trackerMonth-1]} ${trackerYear}`;
+
+  try {
+    const [wlData, evData] = await Promise.all([
+      api(`/api/tracker/worklogs?year=${trackerYear}&month=${trackerMonth}`),
+      api(`/api/tracker/events?year=${trackerYear}&month=${trackerMonth}`).catch(() => ({events:[]})),
+    ]);
+
+    const dayMap = {};
+    wlData.days.forEach(d => { dayMap[d.date] = d; });
+    const evMap = {};
+    if (evData.events) evData.events.forEach(e => { evMap[e.date] = (evMap[e.date]||[]).concat(e); });
+
+    const today = new Date();
+    const todayStr = fmtDate(today.getFullYear(), today.getMonth()+1, today.getDate());
+
+    // Build 6-week grid starting from Sunday of the week containing day 1
+    const firstDow = wlData.first_weekday === 6 ? 0 : wlData.first_weekday + 1;
+    const startOffset = -firstDow;
+
+    const cal = document.getElementById("tracker-calendar");
+    cal.style.gridTemplateColumns = "repeat(7,1fr)";
+
+    // Weekday headers: single letters
+    let html = ["S","M","T","W","T","F","S"].map((h,i) => {
+      const isToday = i === today.getDay();
+      return `<div style="padding:6px 2px;font-size:0.7rem;font-weight:600;text-align:center;color:${isToday?'var(--pico-primary-background)':'var(--pico-muted-color)'};">${h}</div>`;
+    }).join("");
+
+    for (let week = 0; week < 6; week++) {
+      for (let dow = 0; dow < 7; dow++) {
+        const offset = startOffset + week * 7 + dow;
+        const cellDate = new Date(trackerYear, trackerMonth - 1, 1 + offset);
+        const dayNum = cellDate.getDate();
+        const cellMonth = cellDate.getMonth() + 1;
+        const cellYear = cellDate.getFullYear();
+        const dateStr = fmtDate(cellYear, cellMonth, dayNum);
+        const isCurrentMonth = cellMonth === trackerMonth && cellYear === trackerYear;
+        const isToday = dateStr === todayStr;
+
+        const d = dayMap[dateStr];
+        const evs = evMap[dateStr] || [];
+
+        let cellStyle = "min-height:52px;padding:3px 4px;background:var(--pico-card-background-color);border:1px solid var(--pico-card-border-color);overflow:hidden;";
+        if (!isCurrentMonth) cellStyle += "opacity:0.35;";
+        if (isToday) cellStyle += "box-shadow:inset 0 0 0 2px var(--pico-primary-background);";
+
+        let content = `<div style="font-size:0.7rem;font-weight:${isToday?'700':'400'};color:${isCurrentMonth?'var(--pico-color)':'var(--pico-muted-color)'};margin-bottom:2px;">${dayNum}</div>`;
+
+        if (d && d.total > 0) {
+          const dots = d.clinics.map(c =>
+            `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${c.color};margin:0 1px;" title="${escapeHtml(c.clinic_name)}: ${c.count}"></span>`
+          ).join("");
+          content += `<div style="display:flex;align-items:center;gap:2px;margin-bottom:1px;">${dots}<span style="font-weight:700;font-size:0.6rem;color:var(--pico-primary-background);">${d.total}</span></div>`;
+        }
+        if (evs.length > 0) {
+          content += `<div style="margin-top:2px;">`;
+          evs.slice(0,3).forEach((e,i) => {
+            const colors = ["#f87171","#4ade80","#38bdf8","#a78bfa"];
+            content += `<div style="font-size:0.6rem;line-height:1.25;padding-left:4px;border-left:2px solid ${colors[i%colors.length]};margin-bottom:1px;word-break:break-word;" title="${escapeHtml(e.summary)}">${escapeHtml(e.summary)}</div>`;
+          });
+          if (evs.length > 3) content += `<div style="font-size:0.55rem;color:var(--pico-muted-color);padding-left:4px;">+${evs.length-3}</div>`;
+          content += `</div>`;
+        }
+        html += `<div style="${cellStyle}">${content}</div>`;
+      }
+    }
+
+    cal.innerHTML = html;
   } catch (e) {
     toast(e.message, true);
   }
