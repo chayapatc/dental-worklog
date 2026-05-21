@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
 """Dental Worklog — Flask + SQLite + Google OAuth."""
 
+import hashlib
+import hmac
+import json
 import os
+import re
 import secrets
 import sqlite3
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 from pathlib import Path
 
+import requests as http_requests
 from dotenv import load_dotenv
 from flask import Flask, g, jsonify, redirect, request, render_template, session, url_for
 from authlib.integrations.flask_client import OAuth
@@ -28,6 +33,13 @@ app.config.update(
     SESSION_COOKIE_SAMESITE="Lax",
 )
 DATABASE = "dental.db"
+
+# ── LINE Config ─────────────────────────────────────────────────────────
+LINE_CHANNEL_ACCESS_TOKEN = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN", "")
+LINE_CHANNEL_SECRET = os.environ.get("LINE_CHANNEL_SECRET", "")
+LIFF_ID = os.environ.get("LINE_LIFF_ID", "")
+# App URL for LINE binding deep link (must be set)
+APP_URL = os.environ.get("APP_URL", "http://localhost:5199")
 
 # ── OAuth Config ─────────────────────────────────────────────────────────
 oauth = OAuth(app)
@@ -148,6 +160,9 @@ def auth_login():
     if not google.client_id:
         return "Google OAuth not configured — set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET", 500
     redirect_uri = url_for("auth_callback", _external=True)
+    # Store next page in session for post-login redirect
+    next_page = request.args.get("next", "/")
+    session["oauth_next"] = next_page
     return google.authorize_redirect(redirect_uri)
 
 
@@ -183,7 +198,8 @@ def auth_callback():
 
     session["user_id"] = user_id
     session["google_token"] = token.get("access_token")
-    return redirect("/")
+    next_page = session.pop("oauth_next", "/")
+    return redirect(next_page)
 
 
 @app.route("/auth/logout")
@@ -693,7 +709,6 @@ def tracker_worklogs():
 @login_required
 def tracker_events():
     """Fetch Google Calendar events for a month using stored access token."""
-    import requests as http_requests
     year = request.args.get("year", datetime.now(timezone.utc).year, type=int)
     month = request.args.get("month", datetime.now(timezone.utc).month, type=int)
     token = session.get("google_token")
@@ -743,6 +758,403 @@ def tracker_events():
         return jsonify({"events": events})
     except Exception:
         return jsonify({"events": [], "error": "Calendar unavailable"})
+
+
+# ── LINE Chat Logger ─────────────────────────────────────────────────────
+
+def _line_verify_signature(body: bytes, signature: str) -> bool:
+    """Verify LINE webhook signature using HMAC-SHA256."""
+    if not LINE_CHANNEL_SECRET:
+        return False
+    import base64
+    expected = base64.b64encode(
+        hmac.new(LINE_CHANNEL_SECRET.encode(), body, hashlib.sha256).digest()
+    ).decode()
+    return hmac.compare_digest(expected, signature)
+
+
+def _line_reply(reply_token: str, messages: list):
+    """Send reply message via LINE Messaging API."""
+    if not LINE_CHANNEL_ACCESS_TOKEN:
+        return
+    try:
+        resp = http_requests.post(
+            "https://api.line.me/v2/bot/message/reply",
+            json={"replyToken": reply_token, "messages": messages},
+            headers={
+                "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}",
+                "Content-Type": "application/json",
+            },
+            timeout=5,
+        )
+    except Exception:
+        pass  # Log silently — don't crash webhook on reply failure
+
+
+def _line_push(user_id: str, messages: list):
+    """Send push message to a LINE user."""
+    if not LINE_CHANNEL_ACCESS_TOKEN:
+        return
+    try:
+        http_requests.post(
+            "https://api.line.me/v2/bot/message/push",
+            json={"to": user_id, "messages": messages},
+            headers={
+                "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}",
+                "Content-Type": "application/json",
+            },
+            timeout=5,
+        )
+    except Exception:
+        pass
+
+
+def _fuzzy_match_clinic(input_name: str, clinics: list) -> dict | None:
+    """Match user input to closest clinic name (case-insensitive, no spaces)."""
+    clean = input_name.lower().replace(" ", "").strip()
+    if not clean:
+        return None
+
+    # Build normalized clinic names
+    normalized = [
+        {"clinic": c, "clean": c["name"].lower().replace(" ", "")}
+        for c in clinics
+    ]
+
+    # 1. Exact match on normalized name
+    for n in normalized:
+        if clean == n["clean"]:
+            return n["clinic"]
+
+    # 2. Input is substring of clinic name or vice versa
+    for n in normalized:
+        if clean in n["clean"] or n["clean"] in clean:
+            return n["clinic"]
+
+    # 3. Levenshtein distance — accept if edit distance <= 30% of longer string
+    def levenshtein(a, b):
+        if len(a) < len(b):
+            return levenshtein(b, a)
+        if len(b) == 0:
+            return len(a)
+        prev = range(len(b) + 1)
+        for i, ca in enumerate(a):
+            curr = [i + 1]
+            for j, cb in enumerate(b):
+                curr.append(min(
+                    prev[j + 1] + 1,      # deletion
+                    curr[j] + 1,            # insertion
+                    prev[j] + (0 if ca == cb else 1),  # substitution
+                ))
+            prev = curr
+        return prev[-1]
+
+    best = None
+    best_dist = 999
+    for n in normalized:
+        d = levenshtein(clean, n["clean"])
+        max_len = max(len(clean), len(n["clean"]))
+        if max_len > 0 and d / max_len <= 0.3 and d < best_dist:
+            best = n["clinic"]
+            best_dist = d
+
+    return best
+
+
+def _parse_log_message(text: str) -> tuple | None:
+    """Parse a LINE message into (hours, income, expense) or None on failure.
+    
+    Format: {hours} {income}i? {expense}e?
+    - h suffix = hours (e.g. "4h")
+    - i prefix/suffix = income (e.g. "i5000" or "5000i")
+    - e prefix/suffix = expense (e.g. "e500" or "500e")
+    - Bare numbers assigned positionally: hours, income, expense
+    """
+    tokens = text.strip().split()
+    if not tokens:
+        return None
+
+    hours = 0.0
+    income = 0.0
+    expense = 0.0
+    has_explicit = {"hours": False, "income": False, "expense": False}
+    positional = []
+
+    for token in tokens:
+        t = token.lower().strip()
+
+        # h suffix: "4h", "0.5h"
+        m = re.match(r'^(\d+(?:\.\d+)?)h$', t)
+        if m:
+            hours = float(m.group(1))
+            has_explicit["hours"] = True
+            continue
+
+        # i prefix: "i5000"
+        m = re.match(r'^i(\d+(?:\.\d+)?)$', t)
+        if m:
+            income = float(m.group(1))
+            has_explicit["income"] = True
+            continue
+
+        # i suffix: "5000i"
+        m = re.match(r'^(\d+(?:\.\d+)?)i$', t)
+        if m:
+            income = float(m.group(1))
+            has_explicit["income"] = True
+            continue
+
+        # e prefix: "e500"
+        m = re.match(r'^e(\d+(?:\.\d+)?)$', t)
+        if m:
+            expense = float(m.group(1))
+            has_explicit["expense"] = True
+            continue
+
+        # e suffix: "500e"
+        m = re.match(r'^(\d+(?:\.\d+)?)e$', t)
+        if m:
+            expense = float(m.group(1))
+            has_explicit["expense"] = True
+            continue
+
+        # Pure number
+        m = re.match(r'^(\d+(?:\.\d+)?)$', t)
+        if m:
+            positional.append(float(m.group(1)))
+            continue
+
+        # Unrecognized token
+        return None
+
+    # Assign positional values to unset fields
+    pos_idx = 0
+    if not has_explicit["hours"] and pos_idx < len(positional):
+        hours = positional[pos_idx]; pos_idx += 1
+    if not has_explicit["income"] and pos_idx < len(positional):
+        income = positional[pos_idx]; pos_idx += 1
+    if not has_explicit["expense"] and pos_idx < len(positional):
+        expense = positional[pos_idx]; pos_idx += 1
+
+    # Require at least one meaningful value
+    if hours == 0 and income == 0 and expense == 0:
+        return None
+
+    return (hours, income, expense)
+
+
+@app.route("/api/line/webhook", methods=["POST"])
+def line_webhook():
+    """LINE Messaging API webhook endpoint."""
+    body = request.get_data()
+    signature = request.headers.get("X-Line-Signature", "")
+
+    # Verify signature (skip if LINE_CHANNEL_SECRET not configured — dev mode)
+    if LINE_CHANNEL_SECRET and not _line_verify_signature(body, signature):
+        return "Invalid signature", 403
+
+    try:
+        events = json.loads(body).get("events", [])
+    except json.JSONDecodeError:
+        return "Invalid JSON", 400
+
+    if not events:
+        return "OK", 200
+
+    db = get_db()
+
+    for ev in events:
+        ev_type = ev.get("type", "")
+        reply_token = ev.get("replyToken", "")
+        source = ev.get("source", {})
+        line_user_id = source.get("userId", "")
+
+        if not line_user_id:
+            continue
+
+        # Find the bound dental worklog user
+        user_row = db.execute(
+            "SELECT id, email, name FROM users WHERE line_user_id = ?",
+            (line_user_id,)
+        ).fetchone()
+
+        if ev_type == "follow":
+            # User added the OA — send greeting with bind link
+            if user_row:
+                msg = (
+                    f"Welcome back, {user_row['name']}! 🦷\n\n"
+                    f"Format: {{clinic}} {{hours}} {{income}} {{expense}}\n"
+                    f"Examples:\n"
+                    f"• vela 4 5000\n"
+                    f"• mjh 1 i1000 e500\n"
+                    f"• vela 500e\n\n"
+                    f"Reply with your log entry now."
+                )
+            else:
+                bind_url = f"https://liff.line.me/{LIFF_ID}" if LIFF_ID else f"{APP_URL}/line/liff-bind"
+                msg = (
+                    f"Welcome to Dental Worklog! 🦷\n\n"
+                    f"Tap to bind your account:\n"
+                    f"{bind_url}\n\n"
+                    f"After binding, log entries like:\n"
+                    f"vela 4 5000"
+                )
+            _line_reply(reply_token, [{"type": "text", "text": msg}])
+            continue
+
+        if ev_type != "message" or ev.get("message", {}).get("type") != "text":
+            continue
+
+        text = ev["message"]["text"].strip()
+
+        if not user_row:
+            # User hasn't bound yet
+            bind_url = f"https://liff.line.me/{LIFF_ID}" if LIFF_ID else f"{APP_URL}/line/liff-bind"
+            _line_reply(reply_token, [{"type": "text", "text": f"Tap to bind your account:\n{bind_url}"}])
+            continue
+
+        user_id = user_row["id"]
+
+        # Parse the message: first token = clinic, rest = values
+        parts = text.strip().split(None, 1)  # split into [clinic, rest]
+        if len(parts) < 2:
+            _line_reply(reply_token, [{"type": "text", "text": (
+                "Format: {clinic} {hours} {income} {expense}\n\n"
+                "Examples:\n"
+                "vela 4 5000\n"
+                "mjh 1 i1000 e500\n"
+                "vela 500e\n\n"
+                "h=hours i=income e=expense"
+            )}])
+            continue
+
+        clinic_input = parts[0]
+        rest_text = parts[1]
+
+        # Parse values
+        parsed = _parse_log_message(rest_text)
+        if parsed is None:
+            _line_reply(reply_token, [{"type": "text", "text": (
+                "Can't parse that. Format: {hours} {income}i? {expense}e?\n\n"
+                "Examples:\n"
+                "4 5000        → 4h, income 5000\n"
+                "4h 5000i      → 4h, income 5000\n"
+                "i1000 e500    → income 1000, expense 500\n"
+                "500e          → expense 500"
+            )}])
+            continue
+
+        hours, income, expense = parsed
+
+        # Fuzzy match clinic
+        clinics = db.execute(
+            "SELECT id, name FROM clinics WHERE user_id = ? AND deleted = 0",
+            (user_id,)
+        ).fetchall()
+        clinic_list = [dict(c) for c in clinics]
+
+        matched = _fuzzy_match_clinic(clinic_input, clinic_list)
+        if not matched:
+            names = ", ".join(c["name"] for c in clinic_list) or "(no clinics)"
+            _line_reply(reply_token, [{"type": "text", "text": (
+                f"Clinic '{clinic_input}' not found.\n"
+                f"Your clinics: {names}"
+            )}])
+            continue
+
+        # Create the log entry (today's date in Bangkok time)
+        bangkok_tz = timezone(timedelta(hours=7))
+        today = datetime.now(bangkok_tz).strftime("%Y-%m-%d")
+
+        db.execute(
+            "INSERT INTO work_logs (user_id, clinic_id, date, hours, income, expense) VALUES (?,?,?,?,?,?)",
+            (user_id, matched["id"], today, hours, income, expense),
+        )
+        db.commit()
+
+        # Build confirmation
+        net = income - expense
+        rate = f"฿{int(net/hours)}/h" if hours > 0 else "-"
+        _line_reply(reply_token, [{"type": "text", "text": (
+            f"✓ Logged: {matched['name']}\n"
+            f"  {hours}h | ฿{int(income)} | exp ฿{int(expense)}\n"
+            f"  Net: ฿{int(net)} ({rate})"
+        )}])
+
+    return "OK", 200
+
+
+# ── LINE Binding (LIFF + Google auth) ───────────────────────────────────
+
+@app.route("/line/liff-bind")
+def liff_bind_page():
+    """LIFF binding page — opens inside LINE in-app browser.
+    LIFF SDK provides LINE user ID securely (no URL param).
+    User logs in with Google to complete binding.
+    """
+    return render_template("liff_bind.html", liff_id=LIFF_ID, app_url=APP_URL)
+
+
+@app.route("/api/line/status")
+@login_required
+def line_binding_status():
+    """Return LINE binding status for the current user."""
+    db = get_db()
+    row = db.execute(
+        "SELECT line_user_id FROM users WHERE id = ?",
+        (current_user_id(),)
+    ).fetchone()
+    return jsonify({
+        "bound": bool(row and row["line_user_id"]),
+        "line_user_id": row["line_user_id"] if row else None,
+    })
+
+
+@app.route("/api/line/bind", methods=["POST"])
+@login_required
+def line_bind():
+    """Bind a LINE user ID to the current dental worklog user.
+    Called from LIFF page after Google auth. LINE user ID comes from LIFF SDK.
+    
+    Body: {"line_user_id": "Uxxx"}
+    """
+    data = request.get_json(force=True)
+    line_user_id = data.get("line_user_id", "").strip()
+    if not line_user_id:
+        return jsonify({"error": "Missing line_user_id"}), 400
+
+    db = get_db()
+    uid = current_user_id()
+
+    # Check if this LINE ID is already bound to another user
+    existing = db.execute(
+        "SELECT id FROM users WHERE line_user_id = ? AND id != ?",
+        (line_user_id, uid)
+    ).fetchone()
+    if existing:
+        return jsonify({"error": "This LINE account is already bound to another user."}), 409
+
+    # Bind
+    db.execute(
+        "UPDATE users SET line_user_id = ? WHERE id = ?",
+        (line_user_id, uid)
+    )
+    db.commit()
+
+    return jsonify({"bound": True, "line_user_id": line_user_id})
+
+
+@app.route("/api/line/unbind", methods=["POST"])
+@login_required
+def line_unbind():
+    """Unbind LINE from current user."""
+    db = get_db()
+    db.execute(
+        "UPDATE users SET line_user_id = NULL WHERE id = ?",
+        (current_user_id(),)
+    )
+    db.commit()
+    return jsonify({"bound": False})
 
 
 # ── Main ─────────────────────────────────────────────────────────────────

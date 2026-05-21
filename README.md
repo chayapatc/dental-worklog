@@ -19,6 +19,19 @@ A web app for a dentist to log clinic work hours, income, and expenses, then ran
 - Show a monthly calendar, each day show `count` of worklog on that day.
 - Link with user's google calendar to show events are on that day.
 
+### LINE Chat Logger
+- Connect LINE Official Account to log work entries via chat
+- Secure LIFF-based binding (LINE user ID never exposed in URL)
+- Binding flow: tap LIFF link in LINE → Google sign-in → auto-bind
+- Super concise format: `{clinic} {hours} {income}i? {expense}e?`
+- `h`/`i`/`e` suffixes or positional: `vela 4 5000`, `mjh 1 i1000 e500`, `vela 500e`
+- Case-insensitive fuzzy clinic matching (handles typos and partial names)
+- Green LINE badge in header when connected
+- Auto-uses today's date (Bangkok time)
+
+**Setup:** Create LINE OA + Messaging API channel + LIFF app (endpoint: `/line/liff-bind`).
+Set `LINE_CHANNEL_ACCESS_TOKEN`, `LINE_CHANNEL_SECRET`, `LINE_LIFF_ID` in `.env`.
+
 ### Trends (merged Rate + Income Ranking)
 - Metric toggle: **Hourly Rate** or **Net Income**
 - Period toggle: **1W** (weekly), **1M** (monthly), **3M** (quarterly), **6M** (half-year)
@@ -88,8 +101,13 @@ No build step, no bundler, no Node.js required.
 | GET | `/api/reports/ranking?period=` | Trends data (weekly/monthly/quarterly/semiyearly) |
 | GET | `/api/reports/income-ranking?start=&end=` | Net Income report with date range |
 | GET | `/api/reports/monthly-summary?year=` | Monthly P&amp;L: income, expense, net for 12 months |
+| GET | `/api/line/status` | LINE binding status for current user |
+| POST | `/api/line/bind` | Bind LINE account (Google auth + LIFF) |
+| POST | `/api/line/unbind` | Unbind LINE account |
+| POST | `/api/line/webhook` | LINE Messaging API webhook (no auth) |
+| GET | `/line/liff-bind` | LIFF binding page (opens in LINE in-app browser) |
 
-All `/api/*` routes require authentication (401 if not logged in).
+All `/api/*` routes require authentication (401 if not logged in), except `/api/line/webhook`.
 
 ## Hosting & Deployment
 

@@ -83,6 +83,30 @@ function showApp() {
   // Initialize color swatches on add clinic form
   document.getElementById("color-swatches").innerHTML = buildColorSwatches(COLOR_PRESETS[0]);
   document.getElementById("clinic-color-picker").value = COLOR_PRESETS[0];
+
+  // Check LINE binding status
+  checkLineBinding();
+
+  // Handle LINE binding success redirect
+  if (window.location.search.includes("line_bound=1")) {
+    toast("LINE account bound successfully! 🟢");
+    window.history.replaceState({}, "", "/");
+  }
+}
+
+async function checkLineBinding() {
+  try {
+    const res = await fetch("/api/line/status");
+    if (res.status === 401) return;
+    const data = await res.json();
+    const badge = document.getElementById("line-badge");
+    if (data.bound) {
+      badge.style.display = "";
+      badge.title = "LINE connected";
+    } else {
+      badge.style.display = "none";
+    }
+  } catch {}
 }
 
 function logout() {

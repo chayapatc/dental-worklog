@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Bind LINE — Dental Worklog</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+<script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<style>
+  body {
+    min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 1.5rem; text-align: center; padding: 2rem 1rem;
+  }
+  .logo { font-size: 3rem; }
+  h2 { margin: 0; }
+  p { max-width: 320px; opacity: 0.7; margin: 0; }
+  .line-badge {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    background: #06c755; color: #fff; padding: 0.4rem 1rem;
+    border-radius: 20px; font-size: 0.85rem; font-weight: 600;
+  }
+  .google-btn {
+    display: inline-flex; align-items: center; gap: 0.75rem;
+    background: #fff; color: #1f1f1f; border: none;
+    padding: 0.75rem 1.5rem; border-radius: 8px; cursor: pointer;
+    font-size: 1rem; font-weight: 500; text-decoration: none;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  }
+  .google-btn:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.4); }
+  #loading { opacity: 0.7; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<div class="logo">🦷</div>
+<h2>Dental Worklog</h2>
+
+<!-- Loading -->
+<div id="loading">
+  <p>Opening LINE…</p>
+  <progress></progress>
+</div>
+
+<!-- Step 1: LINE detected, need Google login -->
+<div id="step-google" class="hidden">
+  <div class="line-badge">
+    <span>🟢</span> <span id="line-name"></span>
+  </div>
+  <p>Sign in with Google to link your account</p>
+  <a id="google-login-btn" href="/auth/login" class="google-btn">
+    <svg viewBox="0 0 24 24" width="20" height="20"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+    Sign in with Google
+  </a>
+</div>
+
+<!-- Step 2: Both LINE and Google ready — bind -->
+<div id="step-bind" class="hidden">
+  <div class="line-badge">
+    <span>🟢</span> <span id="line-name2"></span>
+  </div>
+  <p>Google account: <strong id="google-email"></strong></p>
+  <p>Ready to bind your LINE account?</p>
+  <button id="bind-btn" class="primary" style="font-size:1rem;padding:0.75rem 2rem;">Bind Account</button>
+</div>
+
+<!-- Done -->
+<div id="step-done" class="hidden">
+  <p style="font-size:2rem;">✅</p>
+  <p><strong>Binding complete!</strong></p>
+  <p>You can now log work entries via LINE chat.</p>
+  <p style="font-size:0.8rem;opacity:0.5;">Close this window and return to LINE.</p>
+</div>
+
+<!-- Error -->
+<div id="step-error" class="hidden">
+  <p style="font-size:2rem;">⚠️</p>
+  <p id="error-msg">Something went wrong.</p>
+</div>
+
+<script>
+let lineUserId = null;
+let lineDisplayName = null;
+
+async function init() {
+  // Determine the redirect URI for Google OAuth callback
+  // After Google login, come back to this LIFF page
+  const googleBtn = document.getElementById("google-login-btn");
+  googleBtn.href = "/auth/login?next=" + encodeURIComponent("/line/liff-bind");
+
+  try {
+    // Initialize LIFF
+    await liff.init({ liffId: "{{ liff_id }}" });
+
+    if (!liff.isLoggedIn()) {
+      liff.login();
+      return;
+    }
+
+    const profile = await liff.getProfile();
+    lineUserId = profile.userId;
+    lineDisplayName = profile.displayName;
+
+    document.getElementById("line-name").textContent = lineDisplayName;
+    document.getElementById("line-name2").textContent = lineDisplayName;
+
+    // Check Google auth status
+    const res = await fetch("/api/me");
+    const user = await res.json();
+
+    document.getElementById("loading").classList.add("hidden");
+
+    if (!user || !user.id) {
+      // Not logged in to Google — show Google login step
+      document.getElementById("step-google").classList.remove("hidden");
+    } else {
+      // Already logged in to Google — show bind step
+      document.getElementById("google-email").textContent = user.email;
+      document.getElementById("step-bind").classList.remove("hidden");
+    }
+
+  } catch (err) {
+    console.error(err);
+    document.getElementById("loading").classList.add("hidden");
+    
+    // If LIFF fails (not in LINE browser), check if we have Google auth + came back from OAuth
+    const res = await fetch("/api/me");
+    const user = await res.json();
+    
+    if (user && user.id) {
+      // User came back from Google login — handle the ?next= redirect
+      // The LINE user ID might be stored in session or we need to retry LIFF
+      document.getElementById("loading").classList.add("hidden");
+      document.getElementById("error-msg").textContent = 
+        "Please open this page from inside the LINE app. Close and tap the link in LINE chat again.";
+      document.getElementById("step-error").classList.remove("hidden");
+    } else {
+      // Neither LIFF nor Google — just show Google login
+      document.getElementById("step-google").classList.remove("hidden");
+    }
+    return;
+  }
+}
+
+document.getElementById("bind-btn").addEventListener("click", async () => {
+  const btn = document.getElementById("bind-btn");
+  btn.disabled = true;
+  btn.textContent = "Binding…";
+
+  try {
+    const res = await fetch("/api/line/bind", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ line_user_id: lineUserId }),
+    });
+
+    if (!res.ok) {
+      const data = await res.json();
+      throw new Error(data.error || "Binding failed");
+    }
+
+    // Success
+    document.getElementById("step-bind").classList.add("hidden");
+    document.getElementById("step-done").classList.remove("hidden");
+
+    // Notify parent app (for LIFF close)
+    if (liff.isInClient && liff.isInClient()) {
+      setTimeout(() => liff.closeWindow(), 2500);
+    }
+
+  } catch (err) {
+    document.getElementById("step-bind").classList.add("hidden");
+    document.getElementById("error-msg").textContent = err.message;
+    document.getElementById("step-error").classList.remove("hidden");
+  }
+});
+
+init();
+</script>
+</body>
+</html>
