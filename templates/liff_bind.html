@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Bind LINE — Dental Worklog</title>
+<title>Dental Worklog</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
 <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <style>
@@ -14,6 +14,11 @@
   .logo { font-size: 3rem; }
   p { max-width: 320px; opacity: 0.7; margin: 0; }
   .hidden { display: none !important; }
+  .line-badge {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    background: #06c755; color: #fff; padding: 0.4rem 1rem;
+    border-radius: 20px; font-size: 0.85rem; font-weight: 600;
+  }
 </style>
 </head>
 <body>
@@ -21,26 +26,45 @@
 <div class="logo">🦷</div>
 <h2>Dental Worklog</h2>
 
+<!-- Loading -->
 <div id="loading">
-  <p>Connecting to LINE…</p>
+  <p>Opening…</p>
   <progress></progress>
 </div>
 
+<!-- Already bound — logging in -->
+<div id="login-success" class="hidden">
+  <p style="font-size:2rem;">✅</p>
+  <p>Welcome back, <strong id="login-name"></strong>!</p>
+  <p>Opening app…</p>
+</div>
+
+<!-- Not bound — show bind flow -->
+<div id="not-bound" class="hidden">
+  <div class="line-badge"><span>🟢</span> <span id="line-name"></span></div>
+  <p>Link your account to start logging via chat</p>
+  <button id="bind-btn" class="primary" style="font-size:1rem;padding:0.75rem 2rem;">Link Account</button>
+</div>
+
+<!-- Binding in progress -->
+<div id="binding" class="hidden">
+  <p style="font-size:2rem;">🔗</p>
+  <p>Opening your browser…</p>
+  <p style="font-size:0.8rem;opacity:0.5;">Sign in with Google to complete.</p>
+</div>
+
+<!-- Error -->
 <div id="error" class="hidden">
   <p style="font-size:2rem;">⚠️</p>
   <p id="error-msg"></p>
 </div>
 
-<div id="done" class="hidden">
-  <p style="font-size:2rem;">🔗</p>
-  <p>Opening your browser to finish binding…</p>
-  <p style="font-size:0.8rem;opacity:0.5;">If nothing happens, close and try again.</p>
-</div>
-
 <script>
+let lineUserId = null;
+let lineDisplayName = null;
+
 async function init() {
   try {
-    // Init LIFF
     await liff.init({ liffId: "{{ liff_id }}" });
 
     if (!liff.isLoggedIn()) {
@@ -49,10 +73,47 @@ async function init() {
     }
 
     const profile = await liff.getProfile();
-    const lineUserId = profile.userId;
-    const lineDisplayName = profile.displayName;
+    lineUserId = profile.userId;
+    lineDisplayName = profile.displayName;
 
-    // Create binding token
+    // Try auto-login — check if this LINE ID is already bound
+    const loginRes = await fetch("/api/line/liff-login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ line_user_id: lineUserId }),
+    });
+
+    if (loginRes.ok) {
+      const data = await loginRes.json();
+      if (data.logged_in) {
+        // Already bound — show welcome and redirect to app
+        document.getElementById("loading").classList.add("hidden");
+        document.getElementById("login-name").textContent = data.user.name;
+        document.getElementById("login-success").classList.remove("hidden");
+        setTimeout(() => { window.location.href = "/"; }, 1000);
+        return;
+      }
+    }
+
+    // Not bound — show binding flow
+    document.getElementById("loading").classList.add("hidden");
+    document.getElementById("line-name").textContent = lineDisplayName;
+    document.getElementById("not-bound").classList.remove("hidden");
+
+  } catch (err) {
+    console.error(err);
+    document.getElementById("loading").classList.add("hidden");
+    document.getElementById("error-msg").textContent =
+      "Please open from inside the LINE app.";
+    document.getElementById("error").classList.remove("hidden");
+  }
+}
+
+document.getElementById("bind-btn").addEventListener("click", async () => {
+  document.getElementById("not-bound").classList.add("hidden");
+  document.getElementById("binding").classList.remove("hidden");
+
+  try {
     const res = await fetch("/api/line/initiate-bind", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -62,36 +123,23 @@ async function init() {
       }),
     });
 
-    if (!res.ok) {
-      throw new Error("Failed to create binding token");
-    }
-
     const data = await res.json();
-
-    // Show done and open system browser
-    document.getElementById("loading").classList.add("hidden");
-    document.getElementById("done").classList.remove("hidden");
 
     liff.openWindow({
       url: data.url,
-      external: true,  // opens in system browser, not LINE WebView
+      external: true,
     });
 
-    // Close LIFF after a moment
     setTimeout(() => {
-      if (liff.isInClient && liff.isInClient()) {
-        liff.closeWindow();
-      }
+      if (liff.isInClient && liff.isInClient()) liff.closeWindow();
     }, 1500);
 
   } catch (err) {
-    console.error(err);
-    document.getElementById("loading").classList.add("hidden");
-    document.getElementById("error-msg").textContent =
-      "Please open this page from inside the LINE app. Tap the link in LINE chat again.";
+    document.getElementById("binding").classList.add("hidden");
+    document.getElementById("error-msg").textContent = "Failed to start binding. Try again.";
     document.getElementById("error").classList.remove("hidden");
   }
-}
+});
 
 init();
 </script>

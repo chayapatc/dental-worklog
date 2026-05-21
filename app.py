@@ -1095,6 +1095,34 @@ def liff_bind_page():
     return render_template("liff_bind.html", liff_id=LIFF_ID)
 
 
+@app.route("/api/line/liff-login", methods=["POST"])
+def liff_login():
+    """Auto-login via LIFF — sets session if LINE user ID is bound.
+    Called from LIFF page after LIFF SDK provides LINE user ID.
+    Body: {"line_user_id": "Uxxx"}
+    Returns: {"logged_in": true, "user": {...}} or {"logged_in": false}
+    """
+    data = request.get_json(force=True)
+    line_user_id = data.get("line_user_id", "").strip()
+    if not line_user_id:
+        return jsonify({"error": "Missing line_user_id"}), 400
+
+    db = get_db()
+    row = db.execute(
+        "SELECT id, email, name, avatar_url FROM users WHERE line_user_id = ?",
+        (line_user_id,)
+    ).fetchone()
+
+    if not row:
+        return jsonify({"logged_in": False})
+
+    session["user_id"] = row["id"]
+    return jsonify({
+        "logged_in": True,
+        "user": {"id": row["id"], "email": row["email"], "name": row["name"]},
+    })
+
+
 @app.route("/line/confirm-bind")
 def confirm_bind_page():
     """Confirmation page — opens in system browser after LIFF redirect.
