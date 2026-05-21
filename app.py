@@ -1084,15 +1084,95 @@ def line_webhook():
     return "OK", 200
 
 
-# ── LINE Binding (LIFF + Google auth) ───────────────────────────────────
+# ── LINE Binding (LIFF token flow + Google auth) ─────────────────────────
 
 @app.route("/line/liff-bind")
 def liff_bind_page():
-    """LIFF binding page — opens inside LINE in-app browser.
-    LIFF SDK provides LINE user ID securely (no URL param).
-    User logs in with Google to complete binding.
+    """LIFF entry page — opens in LINE in-app browser.
+    Gets LINE user ID via LIFF SDK, creates a binding token,
+    then opens system browser for Google OAuth (avoids disallowed_useragent).
     """
-    return render_template("liff_bind.html", liff_id=LIFF_ID, app_url=APP_URL)
+    return render_template("liff_bind.html", liff_id=LIFF_ID)
+
+
+@app.route("/line/confirm-bind")
+def confirm_bind_page():
+    """Confirmation page — opens in system browser after LIFF redirect.
+    User must be signed in with Google to confirm binding.
+    """
+    token = request.args.get("token", "")
+    return render_template("line_confirm_bind.html", token=token)
+
+
+@app.route("/api/line/initiate-bind", methods=["POST"])
+def initiate_bind():
+    """Create a binding token for LIFF → Google OAuth flow.
+    No auth required — called from LIFF SDK in LINE browser.
+    Body: {"line_user_id": "Uxxx", "line_display_name": "Name"}
+    Returns: {"token": "uuid", "url": "https://app/line/confirm-bind?token=uuid"}
+    """
+    data = request.get_json(force=True)
+    line_user_id = data.get("line_user_id", "").strip()
+    line_display_name = data.get("line_display_name", "").strip()
+    if not line_user_id:
+        return jsonify({"error": "Missing line_user_id"}), 400
+
+    import uuid
+    token = uuid.uuid4().hex
+    expires = (datetime.now(timezone.utc) + timedelta(minutes=10)).strftime("%Y-%m-%d %H:%M:%S")
+
+    db = get_db()
+    # Clean expired tokens
+    db.execute("DELETE FROM line_binding_tokens WHERE expires_at < datetime('now')")
+    db.execute(
+        "INSERT INTO line_binding_tokens (token, line_user_id, line_display_name, expires_at) VALUES (?,?,?,?)",
+        (token, line_user_id, line_display_name, expires),
+    )
+    db.commit()
+
+    confirm_url = f"{APP_URL.rstrip('/')}/line/confirm-bind?token={token}"
+    return jsonify({"token": token, "url": confirm_url})
+
+
+@app.route("/api/line/confirm-bind", methods=["POST"])
+@login_required
+def confirm_bind():
+    """Confirm LINE binding — called from system browser after Google auth.
+    Body: {"token": "uuid"}
+    """
+    data = request.get_json(force=True)
+    token = data.get("token", "").strip()
+    if not token:
+        return jsonify({"error": "Missing token"}), 400
+
+    db = get_db()
+    row = db.execute(
+        "SELECT line_user_id, line_display_name FROM line_binding_tokens WHERE token = ? AND expires_at > datetime('now')",
+        (token,)
+    ).fetchone()
+
+    if not row:
+        return jsonify({"error": "Invalid or expired binding token. Try again from LINE."}), 410
+
+    line_user_id = row["line_user_id"]
+    uid = current_user_id()
+
+    # Check if already bound to another user
+    existing = db.execute(
+        "SELECT id FROM users WHERE line_user_id = ? AND id != ?",
+        (line_user_id, uid)
+    ).fetchone()
+    if existing:
+        db.execute("DELETE FROM line_binding_tokens WHERE token = ?", (token,))
+        db.commit()
+        return jsonify({"error": "This LINE account is already bound to another user."}), 409
+
+    # Bind
+    db.execute("UPDATE users SET line_user_id = ? WHERE id = ?", (line_user_id, uid))
+    db.execute("DELETE FROM line_binding_tokens WHERE token = ?", (token,))
+    db.commit()
+
+    return jsonify({"bound": True, "line_user_id": line_user_id, "line_display_name": row["line_display_name"]})
 
 
 @app.route("/api/line/status")
@@ -1113,9 +1193,7 @@ def line_binding_status():
 @app.route("/api/line/bind", methods=["POST"])
 @login_required
 def line_bind():
-    """Bind a LINE user ID to the current dental worklog user.
-    Called from LIFF page after Google auth. LINE user ID comes from LIFF SDK.
-    
+    """Legacy: direct POST bind (kept for backward compatibility).
     Body: {"line_user_id": "Uxxx"}
     """
     data = request.get_json(force=True)
@@ -1126,7 +1204,6 @@ def line_bind():
     db = get_db()
     uid = current_user_id()
 
-    # Check if this LINE ID is already bound to another user
     existing = db.execute(
         "SELECT id FROM users WHERE line_user_id = ? AND id != ?",
         (line_user_id, uid)
@@ -1134,11 +1211,7 @@ def line_bind():
     if existing:
         return jsonify({"error": "This LINE account is already bound to another user."}), 409
 
-    # Bind
-    db.execute(
-        "UPDATE users SET line_user_id = ? WHERE id = ?",
-        (line_user_id, uid)
-    )
+    db.execute("UPDATE users SET line_user_id = ? WHERE id = ?", (line_user_id, uid))
     db.commit()
 
     return jsonify({"bound": True, "line_user_id": line_user_id})
