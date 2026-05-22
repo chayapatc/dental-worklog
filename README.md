@@ -23,11 +23,12 @@ A web app for a dentist to log clinic work hours, income, and expenses, then ran
 - Connect LINE Official Account to log work entries via chat
 - Secure LIFF-based binding (LINE user ID never exposed in URL)
 - Binding flow: tap LIFF link in LINE → Google sign-in → auto-bind
-- Super concise format: `{clinic} {hours} {income}i? {expense}e?`
+- Super concise format: `{clinic} {hours} {income}i? {expense}e? {date}?`
 - `h`/`i`/`e` suffixes or positional: `vela 4 5000`, `mjh 1 i1000 e500`, `vela 500e`
+- Optional date suffix via `d/m` format: `vela 4 5000 22/5` = May 22 this year
+- No date specified → defaults to today (Bangkok time)
 - Case-insensitive fuzzy clinic matching (handles typos and partial names)
 - Green LINE badge in header when connected
-- Auto-uses today's date (Bangkok time)
 
 **Setup:** Create LINE OA + Messaging API channel + LIFF app (endpoint: `/line/liff-bind`).
 Set `LINE_CHANNEL_ACCESS_TOKEN`, `LINE_CHANNEL_SECRET`, `LINE_LIFF_ID` in `.env`.
@@ -70,7 +71,7 @@ Set `LINE_CHANNEL_ACCESS_TOKEN`, `LINE_CHANNEL_SECRET`, `LINE_LIFF_ID` in `.env`
 - Migrations are tracked in the `_migrations` table and run exactly once per database
 - All migrations are idempotent: `CREATE TABLE IF NOT EXISTS`, `ALTER TABLE ADD COLUMN`, `CREATE INDEX IF NOT EXISTS`
 - **Never violate existing data**: no DROP columns, no breaking type changes
-- Migrations: `001_initial_schema` → `002_legacy_user` → `003_user_id_indexes` → `004_clinic_soft_delete` → `005_clinic_color` → `006_worklog_expense`
+- Migrations: `001_initial_schema` → `002_legacy_user` → `003_user_id_indexes` → `004_clinic_soft_delete` → `005_clinic_color` → `006_worklog_expense` → `007_allow_zero_hours` → `008_line_binding` → `009_binding_tokens`
 
 ## Tech Stack
 
@@ -84,6 +85,15 @@ Set `LINE_CHANNEL_ACCESS_TOKEN`, `LINE_CHANNEL_SECRET`, `LINE_LIFF_ID` in `.env`
 | Charts | Chart.js 4.4 |
 
 No build step, no bundler, no Node.js required.
+
+## Testing
+
+```bash
+python3 -m pytest test_parser.py -v
+```
+
+45 branch-coverage unit tests for the LINE message parser and fuzzy clinic matcher.
+Pre-commit hook runs them automatically — blocks commit on failure.
 
 ## API Endpoints
 
