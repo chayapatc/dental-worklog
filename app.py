@@ -862,17 +862,34 @@ def _fuzzy_match_clinic(input_name: str, clinics: list) -> dict | None:
 
 
 def _parse_log_message(text: str) -> tuple | None:
-    """Parse a LINE message into (hours, income, expense) or None on failure.
+    """Parse a LINE message into (date_str, hours, income, expense) or None.
     
-    Format: {hours} {income}i? {expense}e?
+    Returns: (date_str, hours, income, expense) where date_str is "MM-DD"
+             or None (caller defaults to today).
+
+    Format: {hours} {income}i? {expense}e? {date}?
     - h suffix = hours (e.g. "4h")
     - i prefix/suffix = income (e.g. "i5000" or "5000i")
     - e prefix/suffix = expense (e.g. "e500" or "500e")
     - Bare numbers assigned positionally: hours, income, expense
+    - d/m at end = date (e.g. "22/5" = 22 May this year)
     """
     tokens = text.strip().split()
     if not tokens:
         return None
+
+    # Extract optional date (d/m pattern, last token only)
+    date_str = None
+    date_re = re.compile(r'^(\d{1,2})/(\d{1,2})$')
+    m = date_re.match(tokens[-1])
+    if m:
+        day, month = int(m.group(1)), int(m.group(2))
+        if 1 <= day <= 31 and 1 <= month <= 12:
+            date_str = f"{month:02d}-{day:02d}"
+            tokens = tokens[:-1]
+
+    if not tokens:
+        return None  # only a date, no values
 
     hours = 0.0
     income = 0.0
@@ -940,7 +957,7 @@ def _parse_log_message(text: str) -> tuple | None:
     if hours == 0 and income == 0 and expense == 0:
         return None
 
-    return (hours, income, expense)
+    return (date_str, hours, income, expense)
 
 
 @app.route("/api/line/webhook", methods=["POST"])
@@ -983,11 +1000,12 @@ def line_webhook():
             if user_row:
                 msg = (
                     f"Welcome back, {user_row['name']}! 🦷\n\n"
-                    f"Format: {{clinic}} {{hours}} {{income}} {{expense}}\n"
+                    f"Format: {{clinic}} {{hours}} {{income}} {{expense}} {{date?}}\n"
                     f"Examples:\n"
                     f"• vela 4 5000\n"
                     f"• mjh 1 i1000 e500\n"
-                    f"• vela 500e\n\n"
+                    f"• vela 500e\n"
+                    f"• vela 4 5000 22/5\n\n"
                     f"Reply with your log entry now."
                 )
             else:
@@ -1019,34 +1037,50 @@ def line_webhook():
         parts = text.strip().split(None, 1)  # split into [clinic, rest]
         if len(parts) < 2:
             _line_reply(reply_token, [{"type": "text", "text": (
-                "Format: {clinic} {hours} {income} {expense}\n\n"
+                "Format: {clinic} {hours} {income} {expense} {date?}\n\n"
                 "Examples:\n"
                 "vela 4 5000\n"
                 "mjh 1 i1000 e500\n"
-                "vela 500e\n\n"
-                "h=hours i=income e=expense"
+                "vela 500e\n"
+                "vela 4 5000 22/5\n\n"
+                "h=hours i=income e=expense d/m=date"
             )}])
             continue
 
         clinic_input = parts[0]
         rest_text = parts[1]
 
-        # Parse values
+        # Parse values (+ optional date)
         parsed = _parse_log_message(rest_text)
         if parsed is None:
             _line_reply(reply_token, [{"type": "text", "text": (
-                "Can't parse that. Format: {hours} {income}i? {expense}e?\n\n"
+                "Can't parse that. Format: {hours} {income}i? {expense}e? {date}?\n\n"
                 "Examples:\n"
                 "4 5000        → 4h, income 5000\n"
                 "4h 5000i      → 4h, income 5000\n"
                 "i1000 e500    → income 1000, expense 500\n"
-                "500e          → expense 500"
+                "500e          → expense 500\n"
+                "4 5000 22/5   → 22 May"
             )}])
             continue
 
-        hours, income, expense = parsed
+        date_str, hours, income, expense = parsed
 
-        # Fuzzy match clinic
+        # Build the date: use parsed d/m + current year, or today
+        bangkok_tz = timezone(timedelta(hours=7))
+        if date_str:
+            month, day = date_str.split("-")
+            year = datetime.now(bangkok_tz).year
+            try:
+                work_date = f"{year}-{month}-{day}"
+                datetime.strptime(work_date, "%Y-%m-%d")  # validate (e.g. Feb 30)
+            except ValueError:
+                _line_reply(reply_token, [{"type": "text", "text": (
+                    f"Invalid date: {day}/{month}. Please check."
+                )}])
+                continue
+        else:
+            work_date = datetime.now(bangkok_tz).strftime("%Y-%m-%d")
         clinics = db.execute(
             "SELECT id, name FROM clinics WHERE user_id = ? AND deleted = 0",
             (user_id,)
@@ -1062,13 +1096,10 @@ def line_webhook():
             )}])
             continue
 
-        # Create the log entry (today's date in Bangkok time)
-        bangkok_tz = timezone(timedelta(hours=7))
-        today = datetime.now(bangkok_tz).strftime("%Y-%m-%d")
-
+        # Create the log entry
         db.execute(
             "INSERT INTO work_logs (user_id, clinic_id, date, hours, income, expense) VALUES (?,?,?,?,?,?)",
-            (user_id, matched["id"], today, hours, income, expense),
+            (user_id, matched["id"], work_date, hours, income, expense),
         )
         db.commit()
 
@@ -1076,7 +1107,7 @@ def line_webhook():
         net = income - expense
         rate = f"฿{int(net/hours)}/h" if hours > 0 else "-"
         _line_reply(reply_token, [{"type": "text", "text": (
-            f"✓ Logged: {matched['name']}\n"
+            f"✓ {work_date} | {matched['name']}\n"
             f"  {hours}h | ฿{int(income)} | exp ฿{int(expense)}\n"
             f"  Net: ฿{int(net)} ({rate})"
         )}])
