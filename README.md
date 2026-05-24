@@ -13,6 +13,7 @@ A web app for a dentist to log clinic work hours, income, and expenses, then ran
 - Log work sessions: clinic, date, hours, income, and expense (lab fees, materials)
 - Income and expense can be logged separately — hours required only with income
 - Form clears on save, shows toast with net income and hourly rate
+- Inline edit any log entry — tap ✏️ to modify clinic, date, hours, income, expense
 - Hard-delete individual log entries with confirmation dialog
 - Paginated recent entries (20 per page) showing gross, expense, and net hourly rate
 - Export all logs as CSV with one click
@@ -81,7 +82,7 @@ New users get guided tap-through logging. Power users can type shorthand.
 │     │  Types "5000"                                              │
 │     ▼                                                            │
 │  ┌──────────────────────────────────────────────────────┐      │
-│  │  "Date? (default today)"                             │      │
+│  │  "Date? (type 22 or 22/5)"                          │      │
 │  │  [Today]  or type day number                         │      │
 │  │  (22 = 22nd this month, 22/5 = May 22)              │      │
 │  └──────────────────────────────────────────────────────┘      │
@@ -255,6 +256,25 @@ Set `LINE_CHANNEL_ACCESS_TOKEN`, `LINE_CHANNEL_SECRET`, `LINE_LIFF_ID` in `.env`
 
 No build step, no bundler, no Node.js required.
 
+## Architecture
+
+Refactored into Flask blueprints:
+
+```
+app.py            Flask shell + blueprint registration
+db.py             SQLite connection + migration runner
+auth.py           OAuth routes + login_required
+api/clinics.py    Clinic CRUD
+api/logs.py       Work logs + CSV export + inline edit
+api/reports.py    Ranking, trends, P&L
+api/tracker.py    Calendar + Google Calendar events
+line/parser.py    Message parser + fuzzy clinic matcher
+line/helpers.py   LINE reply/push/signature verification
+line/guided.py    Quick Reply state machine
+line/webhook.py   LINE webhook dispatch
+line/bind.py      LIFF binding routes
+```
+
 ## Testing
 
 ```bash
@@ -275,6 +295,7 @@ Pre-commit hook runs them automatically — blocks commit on failure.
 | DELETE | `/api/clinics/:id` | Soft-delete (hide from list) |
 | GET | `/api/logs?page=&per_page=` | Paginated work logs (20 per page) |
 | POST | `/api/logs` | Create work log (clinic, date, hours, income, expense) |
+| PUT | `/api/logs/:id` | Update work log entry |
 | DELETE | `/api/logs/:id` | Hard-delete work log entry |
 | GET | `/api/logs/export` | Export all logs as CSV |
 | GET | `/api/reports/ranking?period=` | Trends data (weekly/monthly/quarterly/semiyearly) |
