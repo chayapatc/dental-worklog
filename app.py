@@ -939,8 +939,13 @@ def _handle_guided_flow(db, reply_token, line_user_id, user_id, text):
             matched = _auto_create_clinic(db, user_id, text.strip())
         _set_conversation(db, line_user_id, STATE_AWAITING_HOURS, clinic_name=matched["name"])
         items = [
+            ("1h", TRIGGER_HOURS_PREFIX + "1"),
+            ("2h", TRIGGER_HOURS_PREFIX + "2"),
+            ("3h", TRIGGER_HOURS_PREFIX + "3"),
             ("4h", TRIGGER_HOURS_PREFIX + "4"),
+            ("5h", TRIGGER_HOURS_PREFIX + "5"),
             ("6h", TRIGGER_HOURS_PREFIX + "6"),
+            ("7h", TRIGGER_HOURS_PREFIX + "7"),
             ("8h", TRIGGER_HOURS_PREFIX + "8"),
             ("Custom", TRIGGER_HOURS_PREFIX + "custom"),
         ]
@@ -965,8 +970,13 @@ def _handle_guided_flow(db, reply_token, line_user_id, user_id, text):
             matched = _auto_create_clinic(db, user_id, name)
         _set_conversation(db, line_user_id, STATE_AWAITING_HOURS, clinic_name=matched["name"])
         items = [
+            ("1h", TRIGGER_HOURS_PREFIX + "1"),
+            ("2h", TRIGGER_HOURS_PREFIX + "2"),
+            ("3h", TRIGGER_HOURS_PREFIX + "3"),
             ("4h", TRIGGER_HOURS_PREFIX + "4"),
+            ("5h", TRIGGER_HOURS_PREFIX + "5"),
             ("6h", TRIGGER_HOURS_PREFIX + "6"),
+            ("7h", TRIGGER_HOURS_PREFIX + "7"),
             ("8h", TRIGGER_HOURS_PREFIX + "8"),
             ("Custom", TRIGGER_HOURS_PREFIX + "custom"),
         ]
