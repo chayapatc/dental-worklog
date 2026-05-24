@@ -48,8 +48,9 @@
 <div id="step-done" class="hidden">
   <p style="font-size:3rem;">✅</p>
   <p><strong>LINE account linked!</strong></p>
-  <p>Return to LINE and try: <code>vela 4 5000</code></p>
-  <a href="/" style="margin-top:0.5rem;">Open Dental Worklog →</a>
+  <p>A notification was sent to your LINE.<br>Tap it to continue.</p>
+  <a id="line-link" href="#" style="margin-top:0.25rem;">Open LINE →</a>
+  <p style="font-size:0.75rem;opacity:0.5;margin-top:0.5rem;">You can close this page.</p>
 </div>
 
 <!-- Error -->
@@ -89,13 +90,20 @@ document.getElementById("bind-btn").addEventListener("click", async () => {
       body: JSON.stringify({ token: "{{ token }}" }),
     });
 
+    const data = await res.json();
+
     if (!res.ok) {
-      const data = await res.json();
       throw new Error(data.error || "Binding failed");
     }
 
     document.getElementById("step-confirm").classList.add("hidden");
     document.getElementById("step-done").classList.remove("hidden");
+    const link = document.getElementById("line-link");
+    if (data.line_url) {
+      link.href = data.line_url;
+    } else {
+      link.style.display = "none";
+    }
   } catch (err) {
     document.getElementById("step-confirm").classList.add("hidden");
     document.getElementById("error-msg").textContent = err.message;

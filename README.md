@@ -20,15 +20,174 @@ A web app for a dentist to log clinic work hours, income, and expenses, then ran
 - Link with user's google calendar to show events are on that day.
 
 ### LINE Chat Logger
-- Connect LINE Official Account to log work entries via chat
-- Secure LIFF-based binding (LINE user ID never exposed in URL)
-- Binding flow: tap LIFF link in LINE → Google sign-in → auto-bind
-- Super concise format: `{clinic} {hours} {income}i? {expense}e? {date}?`
-- `h`/`i`/`e` suffixes or positional: `vela 4 5000`, `mjh 1 i1000 e500`, `vela 500e`
-- Optional date suffix via `d/m` format: `vela 4 5000 22/5` = May 22 this year
-- No date specified → defaults to today (Bangkok time)
-- Case-insensitive fuzzy clinic matching (handles typos and partial names)
-- Green LINE badge in header when connected
+
+Connect your LINE Official Account to log dental work entries directly from chat.
+New users get guided tap-through logging. Power users can type shorthand.
+
+#### User Journey
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     FIRST-TIME (UNDER 60s)                      │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  USER                          OA (Server)                     │
+│  ────                          ──────────                      │
+│                                                                 │
+│  ① Add OA                                                        │
+│     │                                                            │
+│     ▼                                                            │
+│  ┌──────────────────────────────────────────────────────┐      │
+│  │  "Welcome! 🦷                                        │      │
+│  │                                                      │      │
+│  │  👉 [Tap to link your account]                       │      │
+│  │                                                      │      │
+│  │  After linking, I'll guide you through               │      │
+│  │  your first log — tap, don't type."                  │      │
+│  └──────────────────────────────────────────────────────┘      │
+│     │                                                            │
+│     │  Tap link → Google sign-in → bind ✓                        │
+│     ▼                                                            │
+│  ┌──────────────────────────────────────────────────────┐      │
+│  │  "✅ Linked! Let's log your first entry.              │      │
+│  │                                                      │      │
+│  │  Which clinic?"                                      │      │
+│  │  [+ Add New Clinic]                                  │      │
+│  └──────────────────────────────────────────────────────┘      │
+│     │                                                            │
+│     │  Taps [+ Add New Clinic] → types "Vela Yim"               │
+│     ▼                                                            │
+│  ┌──────────────────────────────────────────────────────┐      │
+│  │  "Vela Yim added!                                    │      │
+│  │                                                      │      │
+│  │  How many hours?"                                    │      │
+│  │  [4h]  [6h]  [8h]  [Other]                          │      │
+│  └──────────────────────────────────────────────────────┘      │
+│     │                                                            │
+│     │  Taps [4h]                                                 │
+│     ▼                                                            │
+│  ┌──────────────────────────────────────────────────────┐      │
+│  │  "Income today?"                                     │      │
+│  └──────────────────────────────────────────────────────┘      │
+│     │                                                            │
+│     │  Types "5000"                                              │
+│     ▼                                                            │
+│  ┌──────────────────────────────────────────────────────┐      │
+│  │  "Date? (default today)"                             │      │
+│  │  [Today]  or type day number                         │      │
+│  │  (22 = 22nd this month, 22/5 = May 22)              │      │
+│  └──────────────────────────────────────────────────────┘      │
+│     │                                                            │
+│     │  Taps [Today] (or types "22/5")                            │
+│     ▼                                                            │
+│  ┌──────────────────────────────────────────────────────┐      │
+│  │  🎉 Done!                                            │      │
+│  │  Vela Yim — 4h, ฿5,000                              │      │
+│  │  Net: ฿5,000 (฿1,250/h)                             │      │
+│  │                                                      │      │
+│  │  🕐 Log again anytime from the menu.                  │      │
+│  │                                                      │      │
+│  │  💡 Pro tip: you can also just type:                  │      │
+│  │    vela 4 5000                                       │      │
+│  │    vela 4 5000 200e    ← add expense                 │      │
+│  │    vela 4 5000 22      ← past date (22nd)            │      │
+│  │                                                      │      │
+│  │  📋 Clinics: 👉 [Web App]                             │      │
+│  └──────────────────────────────────────────────────────┘      │
+│                                                                 │
+│  Done. Guided first, text revealed after.                       │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    DAILY USE (ALREADY BOUND)                     │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  GUIDED (Quick Reply — tap, don't type):                        │
+│                                                                 │
+│  Tap 🕐 Log Today (Rich Menu)                                    │
+│     │                                                            │
+│     ▼                                                            │
+│  [Vela Yim]  [MJH]  [Smile Dental]                              │
+│     │                                                            │
+│     ▼                                                            │
+│  [4h]  [6h]  [8h]  [Custom]                                     │
+│     │                                                            │
+│     ▼                                                            │
+│  Type income: "5000"                                             │
+│     │                                                            │
+│     ▼                                                            │
+│  [Today]  or type d/m                                            │
+│     │                                                            │
+│     ▼                                                            │
+│  ✓ 22 May | Vela Yim — 4h, ฿5,000                               │
+│                                                                 │
+│  ─────────────────────────────────────────────                  │
+│                                                                 │
+│  TEXT (shorthand — type it raw):                                 │
+│                                                                 │
+│  vela 4 5000               → Vela Yim, 4h, ฿5,000, today       │
+│  vela 4 5000 22            → same, 22nd this month              │
+│  vela 4 5000 22/5          → same, May 22                       │
+│  vela 4 5000 200e          → + ฿200 expense                     │
+│  vela 500e                 → expense only, 0h                   │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     ERROR RECOVERY                               │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  Bad text format:                                               │
+│  ┌──────────────────────────────────────────┐                   │
+│  │  Format:  clinic hours income             │                   │
+│  │  e.g.  vela 4 5000                        │                   │
+│  │                                           │                   │
+│  │  Or tap 🕐 Log Today from the menu.       │                   │
+│  └──────────────────────────────────────────┘                   │
+│                                                                 │
+│  Unknown clinic:                                                │
+│  ┌──────────────────────────────────────────┐                   │
+│  │  Not found. Your clinics:                 │                   │
+│  │  Vela Yim, MJH, Smile                     │                   │
+│  │                                           │                   │
+│  │  Reply with a new name to add it.         │                   │
+│  └──────────────────────────────────────────┘                   │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### Format Reference
+
+| Method | Example | Result |
+|--------|---------|--------|
+| **Guided** | Tap 🕐 → [Vela Yim] → [4h] → 5000 → [Today] | No typing (except income) |
+| **Text** | `vela 4 5000` | Vela Yim, 4h, ฿5,000, today |
+| Text + date (this month) | `vela 4 5000 22` | Same, 22nd this month |
+| Text + date (any month) | `vela 4 5000 22/5` | Same, May 22 |
+| Text + expense | `vela 4 5000 200e` | + ฿200 expense |
+| Expense only | `vela 500e` | ฿500 expense, 0h |
+
+- Text: bare numbers = hours, income, expense (positional)
+- `d/m` = specific date (`22/5` = May 22), `d` alone = this month (`22` = 22nd this month)
+- Omit date = today (Bangkok time)
+
+#### Key Behaviors
+
+| Scenario | Response |
+|----------|----------|
+| Follow (unbound) | "Tap to link. After that, I'll guide you." |
+| Binding done | Quick Reply: "Which clinic?" → [+ Add New] |
+| First log (guided) | Step-by-step: clinic → hours → income → 🎉 |
+| First log done | Reveals text shorthand as pro tip |
+| Daily log (guided) | Rich Menu 🕐 → tap clinic → tap hours → type income |
+| Daily log (text) | `vela 4 5000` → instant confirmation |
+| Bad text format | Format reminder + "or tap 🕐 from menu" |
+| Unknown clinic | List existing + "reply new name to add it" |
 
 **Setup:** Create LINE OA + Messaging API channel + LIFF app (endpoint: `/line/liff-bind`).
 Set `LINE_CHANNEL_ACCESS_TOKEN`, `LINE_CHANNEL_SECRET`, `LINE_LIFF_ID` in `.env`.

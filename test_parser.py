@@ -236,6 +236,36 @@ def test_date_positional_overflow_with_date():
     assert _parse_log_message("4 5000 100 200 22/5") == ("05-22", 4.0, 5000.0, 100.0)
 
 
+# --- d-alone date (this month) ---
+
+def test_date_d_alone():
+    """d-alone at end = this month."""
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(timezone(timedelta(hours=7)))
+    expected = f"{now.month:02d}-15"
+    assert _parse_log_message("4 5000 15") == (expected, 4.0, 5000.0, 0.0)
+    assert _parse_log_message("4 5000 100 1") == (f"{now.month:02d}-01", 4.0, 5000.0, 100.0)
+
+
+def test_date_d_alone_explicit():
+    """d-alone with explicit markers."""
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(timezone(timedelta(hours=7)))
+    expected = f"{now.month:02d}-25"
+    assert _parse_log_message("4h i5000 e100 25") == (expected, 4.0, 5000.0, 100.0)
+    # 2-token case ("5000i 20"): d-alone needs 3+ tokens to avoid ambiguity,
+    # so "20" stays as positional hours
+    assert _parse_log_message("5000i 20") == (D, 20.0, 5000.0, 0.0)
+
+
+def test_date_d_alone_invalid():
+    """Out of range d-alone — not consumed as date, falls through to normal parsing."""
+    # "0" is not a valid day → stays as positional (expense=0 in this case)
+    assert _parse_log_message("4 5000 0") == (D, 4.0, 5000.0, 0.0)
+    # "32" is not valid day (1-31) → falls through as positional expense
+    assert _parse_log_message("4 5000 32") == (D, 4.0, 5000.0, 32.0)
+
+
 # =============================================================================
 # _fuzzy_match_clinic
 # =============================================================================
