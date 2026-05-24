@@ -365,6 +365,57 @@ async function executeDelete() {
   }
 }
 
+// ── Inline Edit ─────────────────────────────────────────────────────────
+function editLog(id) {
+  const log = logsCache.find(x => x.id === id);
+  if (!log) return;
+  const row = document.getElementById("log-row-" + id);
+  if (!row) return;
+
+  const clinicOptions = clinicsCache.map(c =>
+    `<option value="${c.id}" ${c.id === log.clinic_id ? 'selected' : ''}>${escapeHtml(c.name)}</option>`
+  ).join("");
+
+  row.innerHTML = `
+    <td><input type="date" value="${log.date}" id="edit-date-${id}" style="margin:0;padding:0.2rem;font-size:0.75rem;width:100%;"></td>
+    <td><select id="edit-clinic-${id}" style="margin:0;padding:0.2rem;font-size:0.75rem;width:100%;">${clinicOptions}</select></td>
+    <td><input type="number" value="${log.hours}" id="edit-hours-${id}" step="0.5" min="0" style="margin:0;padding:0.2rem;font-size:0.75rem;width:60px;"></td>
+    <td style="text-align:right"><input type="number" value="${log.income}" id="edit-income-${id}" step="100" min="0" style="margin:0;padding:0.2rem;font-size:0.75rem;width:90px;text-align:right;"></td>
+    <td style="text-align:right"><input type="number" value="${log.expense}" id="edit-expense-${id}" step="100" min="0" style="margin:0;padding:0.2rem;font-size:0.75rem;width:80px;text-align:right;"></td>
+    <td>-</td>
+    <td style="text-align:center;white-space:nowrap;">
+      <button class="primary" style="padding:0.1rem 0.4rem;font-size:0.65rem;" onclick="saveEditLog(${id})">Save</button>
+      <button class="outline secondary" style="padding:0.1rem 0.4rem;font-size:0.65rem;" onclick="refreshRecentLogs()">Cancel</button>
+    </td>`;
+}
+
+async function saveEditLog(id) {
+  const date = document.getElementById("edit-date-" + id).value;
+  const clinicId = document.getElementById("edit-clinic-" + id).value;
+  const hours = document.getElementById("edit-hours-" + id).value;
+  const income = document.getElementById("edit-income-" + id).value;
+  const expense = document.getElementById("edit-expense-" + id).value;
+
+  if (!clinicId || !date) return toast("Clinic and date required", true);
+
+  try {
+    await api(`/api/logs/${id}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        clinic_id: parseInt(clinicId),
+        date,
+        hours: parseFloat(hours) || 0,
+        income: parseFloat(income) || 0,
+        expense: parseFloat(expense) || 0,
+      }),
+    });
+    toast("Updated");
+    refreshRecentLogs();
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
 // ── Log View ────────────────────────────────────────────────────────────
 async function refreshLogView() {
   await loadClinics();
@@ -390,14 +441,15 @@ async function refreshRecentLogs() {
       return;
     }
     tbody.innerHTML = logs.map(l =>
-      `<tr>
+      `<tr id="log-row-${l.id}">
         <td>${l.date}</td>
         <td>${escapeHtml(l.clinic_name)}</td>
         <td>${l.hours}h</td>
         <td style="text-align:right">฿${l.income.toLocaleString()}</td>
         <td style="text-align:right">${l.expense > 0 ? '-฿' + l.expense.toLocaleString() : '-'}</td>
         <td style="text-align:right" class="${l.hours > 0 ? 'rate-good' : ''}">${l.hours > 0 ? '฿' + Math.round((l.income - l.expense)/l.hours) + '/h' : '-'}</td>
-        <td style="text-align:center;">
+        <td style="text-align:center;white-space:nowrap;">
+          <button class="outline" style="padding:0.1rem 0.4rem;font-size:0.7rem;" onclick="editLog(${l.id})" title="Edit">✏️</button>
           <button class="outline contrast" style="padding:0.1rem 0.4rem;font-size:0.7rem;" onclick="confirmDeleteLog(${l.id})" title="Delete">✕</button>
         </td>
       </tr>`

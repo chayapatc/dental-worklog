@@ -97,6 +97,48 @@ def create_log():
     return jsonify({"id": cur.lastrowid}), 201
 
 
+@logs_bp.route("/api/logs/<int:log_id>", methods=["PUT"])
+@login_required
+def update_log(log_id):
+    """Update an existing work log entry."""
+    data = request.get_json(force=True)
+    uid = current_user_id()
+    db = get_db()
+
+    # Verify ownership
+    row = db.execute(
+        "SELECT id FROM work_logs WHERE id = ? AND user_id = ?",
+        (log_id, uid)
+    ).fetchone()
+    if not row:
+        return jsonify({"error": "Log not found"}), 404
+
+    clinic_id = data.get("clinic_id")
+    date = data.get("date", "")
+    hours = data.get("hours", 0)
+    income = data.get("income", 0)
+    expense = data.get("expense", 0)
+
+    if not clinic_id or not date:
+        return jsonify({"error": "Clinic and date are required"}), 400
+
+    # Verify clinic ownership
+    clinic = db.execute(
+        "SELECT id FROM clinics WHERE id = ? AND user_id = ? AND deleted = 0",
+        (int(clinic_id), uid)
+    ).fetchone()
+    if not clinic:
+        return jsonify({"error": "Clinic not found"}), 403
+
+    hours_val = float(hours) if hours else 0.0
+    db.execute(
+        "UPDATE work_logs SET clinic_id=?, date=?, hours=?, income=?, expense=? WHERE id=?",
+        (int(clinic_id), date, hours_val, float(income), float(expense), log_id),
+    )
+    db.commit()
+    return jsonify({"id": log_id, "updated": True})
+
+
 @logs_bp.route("/api/logs/export", methods=["GET"])
 @login_required
 def export_logs():
