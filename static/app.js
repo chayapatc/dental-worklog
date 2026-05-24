@@ -420,8 +420,18 @@ async function submitLog() {
   const income = document.getElementById("log-income").value;
   const expense = document.getElementById("log-expense").value || 0;
 
-  if (!clinicId || !date || !income) {
-    return toast("Fill all required fields (clinic, date, income)", true);
+  if (!clinicId || !date) {
+    return toast("Fill all required fields (clinic, date)", true);
+  }
+
+  const incomeVal = parseFloat(income) || 0;
+  const expenseVal = parseFloat(expense) || 0;
+  const hoursVal = parseFloat(hours) || 0;
+  if (incomeVal === 0 && expenseVal === 0) {
+    return toast("Enter income or expense", true);
+  }
+  if (incomeVal > 0 && hoursVal === 0) {
+    return toast("Hours required when logging income", true);
   }
 
   try {
@@ -430,14 +440,19 @@ async function submitLog() {
       body: JSON.stringify({
         clinic_id: parseInt(clinicId),
         date,
-        hours: parseFloat(hours) || 0,
-        income: parseFloat(income),
-        expense: parseFloat(expense),
+        hours: hoursVal,
+        income: incomeVal,
+        expense: expenseVal,
       }),
     });
-    document.getElementById("log-hours").value = "0";
+    // Clear form
+    document.getElementById("log-date").value = new Date().toISOString().split("T")[0];
+    document.getElementById("log-hours").value = "";
     document.getElementById("log-income").value = "";
-    toast("Work log saved!");
+    document.getElementById("log-expense").value = "";
+    const net = incomeVal - expenseVal;
+    const rate = hoursVal > 0 ? ` (฿${Math.round(net / hoursVal)}/h)` : "";
+    toast(`Saved! Net: ฿${Math.round(net)}${rate}`);
     currentPage = 1;
     await refreshRecentLogs();
   } catch (e) {
