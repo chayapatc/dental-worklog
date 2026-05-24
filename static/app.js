@@ -178,6 +178,12 @@ function toast(msg, isError = false) {
   el._timer = setTimeout(() => el.classList.remove("show"), 2500);
 }
 
+// Tap toast to dismiss
+document.getElementById("toast").addEventListener("click", function() {
+  this.classList.remove("show");
+  clearTimeout(this._timer);
+});
+
 // ── Load Clinics Cache ─────────────────────────────────────────────────
 async function loadClinics() {
   clinicsCache = await api("/api/clinics");
