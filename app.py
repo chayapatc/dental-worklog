@@ -1567,6 +1567,7 @@ def confirm_bind():
     items = [(c["name"], c["name"]) for c in clinics][:12]
     items.append(("+ Add New Clinic", TRIGGER_NEW_CLINIC))
 
+    _set_conversation(db, line_user_id, STATE_AWAITING_CLINIC)
     _line_push(line_user_id, [
         _line_quick_reply(
             "✅ Account linked!\n\nLet's log your first entry.\n\nWhich clinic?",
