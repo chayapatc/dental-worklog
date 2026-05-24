@@ -1558,10 +1558,19 @@ def confirm_bind():
 
     # Send push message to LINE with guided greeting
     line_id = LINE_OA_BASIC_ID.lstrip("@")
+
+    # Look up existing clinics for this user
+    clinics = db.execute(
+        "SELECT id, name FROM clinics WHERE user_id = ? AND deleted = 0 ORDER BY name",
+        (uid,)
+    ).fetchall()
+    items = [(c["name"], c["name"]) for c in clinics][:12]
+    items.append(("+ Add New Clinic", TRIGGER_NEW_CLINIC))
+
     _line_push(line_user_id, [
         _line_quick_reply(
             "✅ Account linked!\n\nLet's log your first entry.\n\nWhich clinic?",
-            [("+ Add New Clinic", TRIGGER_NEW_CLINIC)]
+            items
         )
     ])
 
