@@ -64,20 +64,6 @@ let lineUserId = null;
 let lineDisplayName = null;
 
 async function init() {
-  // Check for export action (CSV download from LIFF)
-  const params = new URLSearchParams(location.search);
-  const exportUrl = params.get("url");
-  if (exportUrl && params.get("action") === "export") {
-    try {
-      await liff.init({ liffId: "{{ liff_id }}" });
-      liff.openWindow({ url: exportUrl, external: true });
-      setTimeout(() => { if (liff.isInClient()) liff.closeWindow(); }, 500);
-    } catch {
-      window.location.href = exportUrl;
-    }
-    return;
-  }
-
   try {
     await liff.init({ liffId: "{{ liff_id }}" });
 

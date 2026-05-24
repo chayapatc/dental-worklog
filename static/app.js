@@ -170,31 +170,6 @@ async function api(url, opts = {}) {
   return data;
 }
 
-async function exportCSV() {
-  // In LINE LIFF browser: use LIFF SDK to open in system browser
-  const isLINE = /LINE/i.test(navigator.userAgent);
-  if (isLINE) {
-    window.location.href = "/line/liff-bind?action=export&url=" + encodeURIComponent("/api/logs/export");
-    return;
-  }
-  // Normal browser: direct download via fetch
-  try {
-    const res = await fetch("/api/logs/export", { credentials: "same-origin" });
-    if (!res.ok) throw new Error("Export failed");
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "dental_worklog.csv";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  } catch (e) {
-    toast(e.message, true);
-  }
-}
-
 function toast(msg, isError = false) {
   const el = document.getElementById("toast");
   el.textContent = msg;
