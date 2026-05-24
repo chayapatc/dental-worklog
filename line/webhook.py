@@ -116,7 +116,8 @@ def line_webhook():
                 "Can't parse that. Try:\n"
                 "vela 4 5000      → 4h, ฿5,000\n"
                 "vela 4 5000 200e  → + expense\n"
-                "vela 4 5000 22    → past date (22nd)\n\n"
+                "vela 4 5000 22    → past date, 22nd\n"
+                "vela 4 5000 22/5  → past date, May 22\n\n"
                 "Or type 'log' for guided logging."
             )}])
             continue
@@ -169,7 +170,8 @@ def line_webhook():
                 f"💡 Pro tip: you can also just type:\n"
                 f"  vela 4 5000\n"
                 f"  vela 4 5000 200e    ← add expense\n"
-                f"  vela 4 5000 22      ← past date (22nd)\n\n"
+                f"  vela 4 5000 22      ← past date, 22nd\n"
+                f"  vela 4 5000 22/5    ← past date, May 22\n\n"
                 f"📋 Clinics: 👉 {APP_URL.rstrip('/')}"
             )}])
         else:

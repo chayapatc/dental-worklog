@@ -220,7 +220,7 @@ def _handle_guided_flow(db, reply_token, line_user_id, user_id, text):
             ("Yesterday", TRIGGER_DATE_YESTERDAY),
         ]
         _line_reply(reply_token, [_line_quick_reply(
-            f"Date? (or type day number, e.g. 22 = 22nd)", items
+            f"Date? (type day number 22 or 22/5, default today)", items
         )])
         return
 
@@ -295,7 +295,8 @@ def _handle_guided_flow(db, reply_token, line_user_id, user_id, text):
                 f"💡 Pro tip: you can also just type:\n"
                 f"  vela 4 5000\n"
                 f"  vela 4 5000 200e    ← add expense\n"
-                f"  vela 4 5000 22      ← past date (22nd)\n\n"
+                f"  vela 4 5000 22      ← past date, 22nd\n"
+                f"  vela 4 5000 22/5    ← past date, May 22\n\n"
                 f"📋 Clinics: 👉 {APP_URL.rstrip('/')}"
             )}])
         else:
