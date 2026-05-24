@@ -220,7 +220,7 @@ def _handle_guided_flow(db, reply_token, line_user_id, user_id, text):
             ("Yesterday", TRIGGER_DATE_YESTERDAY),
         ]
         _line_reply(reply_token, [_line_quick_reply(
-            f"Date? (type day number 22 or 22/5, default today)", items
+            "Date? (or type date number e.g. 22 or 22/5)", items
         )])
         return
 
