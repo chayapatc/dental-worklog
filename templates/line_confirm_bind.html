@@ -106,11 +106,7 @@ document.getElementById("bind-btn").addEventListener("click", async () => {
     document.getElementById("step-confirm").classList.add("hidden");
     document.getElementById("step-done").classList.remove("hidden");
     const link = document.getElementById("line-link");
-    if (data.line_url) {
-      link.href = data.line_url;
-    } else {
-      link.style.display = "none";
-    }
+    link.href = data.line_url || "https://line.me/R/ti/p/@746sqpij";
   } catch (err) {
     document.getElementById("step-confirm").classList.add("hidden");
     document.getElementById("error-msg").textContent = err.message;
