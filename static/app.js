@@ -114,25 +114,31 @@ function logout() {
 }
 
 // ── Navigation ──────────────────────────────────────────────────────────
-document.querySelectorAll("nav [data-view]").forEach(link => {
+function switchTab(view) {
+  document.querySelectorAll("nav [data-view], .bottom-nav [data-view]").forEach(b => b.classList.remove("active"));
+  document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
+  document.getElementById("view-" + view).classList.add("active");
+  // Mark active on both top nav and bottom nav
+  document.querySelectorAll(`[data-view="${view}"]`).forEach(el => el.classList.add("active"));
+  if (view === "log") refreshLogView();
+  if (view === "clinics") refreshClinics();
+  if (view === "tracker") refreshTracker();
+  if (view === "trends") refreshTrends();
+  if (view === "monthly") refreshMonthly();
+  if (view === "income") setDefaultDates();
+  // Scroll active bottom nav tab into view
+  const activeTab = document.querySelector(".bottom-nav-scroll a.active");
+  if (activeTab) activeTab.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+}
+
+document.querySelectorAll("nav [data-view], .bottom-nav [data-view]").forEach(link => {
   link.addEventListener("click", (e) => {
     e.preventDefault();
-    document.querySelectorAll("nav [data-view]").forEach(b => b.classList.remove("active"));
-    link.classList.add("active");
-    document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
-    document.getElementById("view-" + link.dataset.view).classList.add("active");
-    if (link.dataset.view === "log") refreshLogView();
-    if (link.dataset.view === "clinics") refreshClinics();
-    if (link.dataset.view === "tracker") refreshTracker();
-    if (link.dataset.view === "trends") refreshTrends();
-    if (link.dataset.view === "monthly") refreshMonthly();
-    if (link.dataset.view === "income") setDefaultDates();
-    // Close mobile menu after selecting
+    switchTab(link.dataset.view);
     document.getElementById("main-nav").classList.remove("mobile-open");
   });
 });
 
-// Hamburger menu toggle
 document.getElementById("menu-toggle").addEventListener("click", () => {
   document.getElementById("main-nav").classList.toggle("mobile-open");
 });
