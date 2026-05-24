@@ -992,7 +992,7 @@ def _handle_guided_flow(db, reply_token, line_user_id, user_id, text):
                 return
         _set_conversation(db, line_user_id, STATE_AWAITING_INCOME,
                          clinic_name=conv["clinic_name"], hours=hours)
-        _line_reply(reply_token, [{"type": "text", "text": "Income today?"}])
+        _line_reply(reply_token, [{"type": "text", "text": "Income today? (type amount, e.g. 5000)"}])
         return
 
     # --- State: AWAITING_INCOME ---
