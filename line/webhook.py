@@ -6,7 +6,12 @@ from flask import Blueprint, request, jsonify
 from db import get_db
 from line.parser import _parse_log_message, _fuzzy_match_clinic
 from line.helpers import _line_reply, _line_push, _line_verify_signature, _line_quick_reply
-from line.guided import *
+from line.guided import (
+    TRIGGER_LOG_TODAY, TRIGGER_NEW_CLINIC, TRIGGER_HOURS_PREFIX,
+    TRIGGER_DATE_TODAY, TRIGGER_DATE_YESTERDAY,
+    _handle_guided_flow, _get_conversation, _clear_conversation,
+    _auto_create_clinic, _build_work_date, _is_first_log, _mark_first_log_done,
+)
 
 LINE_CHANNEL_SECRET = os.environ.get("LINE_CHANNEL_SECRET", "")
 LIFF_ID = os.environ.get("LINE_LIFF_ID", "")
