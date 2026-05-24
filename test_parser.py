@@ -4,7 +4,7 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from app import _parse_log_message, _fuzzy_match_clinic
+from line.parser import _parse_log_message, _fuzzy_match_clinic
 
 # Shorthand: None means no date in text, caller defaults to today
 D = None  # no date (default today)
