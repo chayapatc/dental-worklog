@@ -11,9 +11,16 @@ A web app for a dentist to log clinic work hours, income, and expenses, then ran
 
 ### Work Logs
 - Log work sessions: clinic, date, hours, income, and expense (lab fees, materials)
+- Income and expense can be logged separately — hours required only with income
+- Form clears on save, shows toast with net income and hourly rate
 - Hard-delete individual log entries with confirmation dialog
 - Paginated recent entries (20 per page) showing gross, expense, and net hourly rate
 - Export all logs as CSV with one click
+
+### Navigation
+- Desktop: top tab bar with all 6 views
+- Mobile: scrollable bottom tab bar with icons — no hamburger menu
+- Swipe to reveal hidden tabs, active tab auto-scrolls into view
 
 ### Tracker
 - Show a monthly calendar, each day show `count` of worklog on that day.
@@ -61,13 +68,14 @@ New users get guided tap-through logging. Power users can type shorthand.
 │  │  "Vela Yim added!                                    │      │
 │  │                                                      │      │
 │  │  How many hours?"                                    │      │
-│  │  [4h]  [6h]  [8h]  [Other]                          │      │
+│  │  [1h] [2h] [3h] [4h] [5h] [6h] [7h] [8h]             │      │
+│  │  [Custom]                                             │      │
 │  └──────────────────────────────────────────────────────┘      │
 │     │                                                            │
 │     │  Taps [4h]                                                 │
 │     ▼                                                            │
 │  ┌──────────────────────────────────────────────────────┐      │
-│  │  "Income today?"                                     │      │
+│  │  "Income today? (type amount, e.g. 5000)"            │      │
 │  └──────────────────────────────────────────────────────┘      │
 │     │                                                            │
 │     │  Types "5000"                                              │
@@ -113,7 +121,7 @@ New users get guided tap-through logging. Power users can type shorthand.
 │  [Vela Yim]  [MJH]  [Smile Dental]                              │
 │     │                                                            │
 │     ▼                                                            │
-│  [4h]  [6h]  [8h]  [Custom]                                     │
+│  [1h] [2h] [3h] [4h] [5h] [6h] [7h] [8h] [Custom]              │
 │     │                                                            │
 │     ▼                                                            │
 │  Type income: "5000"                                             │
@@ -181,13 +189,15 @@ New users get guided tap-through logging. Power users can type shorthand.
 | Scenario | Response |
 |----------|----------|
 | Follow (unbound) | "Tap to link. After that, I'll guide you." |
-| Binding done | Quick Reply: "Which clinic?" → [+ Add New] |
-| First log (guided) | Step-by-step: clinic → hours → income → 🎉 |
+| Binding done | Push: "✅ Linked! Which clinic?" with user's clinics + [+ Add New] |
+| Binding page | Shows green "💬 Back to LINE Chat" button |
+| First log (guided) | Step-by-step: clinic → hours → income → date → 🎉 |
 | First log done | Reveals text shorthand as pro tip |
-| Daily log (guided) | Rich Menu 🕐 → tap clinic → tap hours → type income |
+| Daily log (guided) | Type `log` or use Rich Menu 🕐 → tap → tap → type |
 | Daily log (text) | `vela 4 5000` → instant confirmation |
-| Bad text format | Format reminder + "or tap 🕐 from menu" |
+| Bad text format | Format reminder + "or type log for guided" |
 | Unknown clinic | List existing + "reply new name to add it" |
+| No clinics | Auto-creates clinic from name, logs entry |
 
 **Setup:** Create LINE OA + Messaging API channel + LIFF app (endpoint: `/line/liff-bind`).
 Set `LINE_CHANNEL_ACCESS_TOKEN`, `LINE_CHANNEL_SECRET`, `LINE_LIFF_ID` in `.env`.
@@ -230,7 +240,7 @@ Set `LINE_CHANNEL_ACCESS_TOKEN`, `LINE_CHANNEL_SECRET`, `LINE_LIFF_ID` in `.env`
 - Migrations are tracked in the `_migrations` table and run exactly once per database
 - All migrations are idempotent: `CREATE TABLE IF NOT EXISTS`, `ALTER TABLE ADD COLUMN`, `CREATE INDEX IF NOT EXISTS`
 - **Never violate existing data**: no DROP columns, no breaking type changes
-- Migrations: `001_initial_schema` → `002_legacy_user` → `003_user_id_indexes` → `004_clinic_soft_delete` → `005_clinic_color` → `006_worklog_expense` → `007_allow_zero_hours` → `008_line_binding` → `009_binding_tokens`
+- Migrations: `001_initial_schema` → `002_legacy_user` → `003_user_id_indexes` → `004_clinic_soft_delete` → `005_clinic_color` → `006_worklog_expense` → `007_allow_zero_hours` → `008_line_binding` → `009_binding_tokens` → `010_first_log_done` → `011_line_conversations`
 
 ## Tech Stack
 
@@ -251,7 +261,7 @@ No build step, no bundler, no Node.js required.
 python3 -m pytest test_parser.py -v
 ```
 
-45 branch-coverage unit tests for the LINE message parser and fuzzy clinic matcher.
+48 branch-coverage unit tests for the LINE message parser and fuzzy clinic matcher.
 Pre-commit hook runs them automatically — blocks commit on failure.
 
 ## API Endpoints
