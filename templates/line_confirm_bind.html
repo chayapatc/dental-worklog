@@ -20,6 +20,13 @@
     box-shadow: 0 1px 3px rgba(0,0,0,0.3);
   }
   .google-btn:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.4); }
+  .line-btn {
+    display: inline-flex; align-items: center; gap: 0.5rem;
+    background: #06c755; color: #fff; border: none;
+    padding: 0.75rem 1.5rem; border-radius: 8px; cursor: pointer;
+    font-size: 1rem; font-weight: 600; text-decoration: none;
+  }
+  .line-btn:hover { background: #05a649; }
   .hidden { display: none !important; }
 </style>
 </head>
@@ -48,9 +55,9 @@
 <div id="step-done" class="hidden">
   <p style="font-size:3rem;">✅</p>
   <p><strong>LINE account linked!</strong></p>
-  <p>A notification was sent to your LINE.<br>Tap it to continue.</p>
-  <a id="line-link" href="#" style="margin-top:0.25rem;">Open LINE →</a>
-  <p style="font-size:0.75rem;opacity:0.5;margin-top:0.5rem;">You can close this page.</p>
+  <p>Notification sent to your LINE — tap it to continue.</p>
+  <a id="line-link" href="#" class="line-btn">💬 Back to LINE Chat</a>
+  <p style="font-size:0.75rem;opacity:0.5;margin-top:1rem;">You can close this page.</p>
 </div>
 
 <!-- Error -->
