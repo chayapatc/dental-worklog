@@ -4,7 +4,7 @@ import json
 from datetime import datetime, timezone, timedelta
 from flask import Blueprint, request, jsonify
 from db import get_db
-from line.parser import _parse_log_message, _fuzzy_match_clinic
+from core.parser import parse_log_message as _parse_log_message, fuzzy_match_clinic as _fuzzy_match_clinic
 from line.helpers import _line_reply, _line_push, _line_verify_signature, _line_quick_reply
 from line.guided import handle_guided_message, is_in_guided_flow, _clear_conversation, _auto_create_clinic, _build_work_date, _is_first_log, _mark_first_log_done
 from config import LINE_CHANNEL_SECRET, LINE_LIFF_ID as LIFF_ID, APP_URL

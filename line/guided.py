@@ -11,7 +11,7 @@ Everything else is private implementation.
 import os, re
 from datetime import datetime, timezone, timedelta
 from config import APP_URL
-from line.parser import _fuzzy_match_clinic
+from core.parser import fuzzy_match_clinic as _fuzzy_match_clinic
 from line.helpers import _line_reply, _line_quick_reply
 from db import get_db
 
