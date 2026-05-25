@@ -10,11 +10,10 @@ Everything else is private implementation.
 
 import os, re
 from datetime import datetime, timezone, timedelta
+from config import APP_URL
 from line.parser import _fuzzy_match_clinic
 from line.helpers import _line_reply, _line_quick_reply
 from db import get_db
-
-APP_URL = os.environ.get("APP_URL", "http://localhost:5199")
 
 # ── Internal constants ────────────────────────────────────────────────────
 

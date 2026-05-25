@@ -2,11 +2,7 @@
 
 import hmac, hashlib, base64
 import requests as http_requests
-import os
-
-# Config loaded from app environment
-LINE_CHANNEL_ACCESS_TOKEN = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN", "")
-LINE_CHANNEL_SECRET = os.environ.get("LINE_CHANNEL_SECRET", "")
+from config import LINE_CHANNEL_ACCESS_TOKEN, LINE_CHANNEL_SECRET
 
 # ── LINE Chat Logger ─────────────────────────────────────────────────────
 

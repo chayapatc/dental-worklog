@@ -1,16 +1,13 @@
 """LINE webhook endpoint."""
 
-import json, os
+import json
 from datetime import datetime, timezone, timedelta
 from flask import Blueprint, request, jsonify
 from db import get_db
 from line.parser import _parse_log_message, _fuzzy_match_clinic
 from line.helpers import _line_reply, _line_push, _line_verify_signature, _line_quick_reply
 from line.guided import handle_guided_message, is_in_guided_flow, _clear_conversation, _auto_create_clinic, _build_work_date, _is_first_log, _mark_first_log_done
-
-LINE_CHANNEL_SECRET = os.environ.get("LINE_CHANNEL_SECRET", "")
-LIFF_ID = os.environ.get("LINE_LIFF_ID", "")
-APP_URL = os.environ.get("APP_URL", "http://localhost:5199")
+from config import LINE_CHANNEL_SECRET, LINE_LIFF_ID as LIFF_ID, APP_URL
 
 line_bp = Blueprint("line_webhook", __name__)
 

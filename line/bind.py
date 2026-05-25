@@ -1,6 +1,5 @@
 """LINE LIFF binding routes."""
 
-import os
 from datetime import datetime, timezone, timedelta
 from flask import Blueprint, request, jsonify, session, render_template
 from db import get_db
@@ -8,9 +7,7 @@ from auth import login_required, current_user_id
 from line.helpers import _line_push, _line_quick_reply
 from line.guided import start_guided_flow
 
-LINE_LIFF_ID = os.environ.get("LINE_LIFF_ID", "")
-LINE_OA_BASIC_ID = os.environ.get("LINE_OA_BASIC_ID", "")
-APP_URL = os.environ.get("APP_URL", "http://localhost:5199")
+from config import LINE_LIFF_ID, LINE_OA_BASIC_ID, APP_URL
 LIFF_ID = LINE_LIFF_ID  # alias for template compatibility
 
 line_bind_bp = Blueprint("line_bind", __name__)
