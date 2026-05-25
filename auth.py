@@ -2,9 +2,29 @@
 
 from functools import wraps
 from flask import Blueprint, session, redirect, request, url_for, render_template, jsonify
+from authlib.integrations.flask_client import OAuth
 from db import get_db
+from config import GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
 
 auth_bp = Blueprint("auth", __name__)
+
+# OAuth client — initialized by app.py calling init_oauth(app)
+_oauth = OAuth()
+google = None
+
+
+def init_oauth(app):
+    """Register Google OAuth on the Flask app. Called by app.py."""
+    global google
+    _oauth.init_app(app)
+    google = _oauth.register(
+        name="google",
+        client_id=GOOGLE_CLIENT_ID,
+        client_secret=GOOGLE_CLIENT_SECRET,
+        server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
+        client_kwargs={"scope": "openid email profile https://www.googleapis.com/auth/calendar.readonly"},
+    )
+    return google
 
 
 def login_required(f):
@@ -34,7 +54,6 @@ def api_me():
 
 @auth_bp.route("/auth/login")
 def auth_login():
-    from app import google
     if not google.client_id:
         return "Google OAuth not configured — set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET", 500
     redirect_uri = url_for("auth.auth_callback", _external=True)
@@ -45,7 +64,6 @@ def auth_login():
 
 @auth_bp.route("/auth/callback")
 def auth_callback():
-    from app import google
     token = google.authorize_access_token()
     userinfo = token.get("userinfo")
     if not userinfo:

@@ -1,18 +1,15 @@
 #!/usr/bin/env python3
 """Dental Worklog — Flask + SQLite + Google OAuth (blueprint shell)."""
 
-import os
 import secrets
 
 from dotenv import load_dotenv
 from flask import Flask
-from authlib.integrations.flask_client import OAuth
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 load_dotenv()
 
-from config import SECRET_KEY, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
-from config import LINE_CHANNEL_ACCESS_TOKEN, LINE_CHANNEL_SECRET, LINE_LIFF_ID, LINE_OA_BASIC_ID, APP_URL
+from config import SECRET_KEY
 
 app = Flask(__name__)
 app.secret_key = SECRET_KEY or secrets.token_hex(32)
@@ -24,20 +21,6 @@ app.config.update(
     SESSION_COOKIE_SAMESITE="Lax",
 )
 
-# ── OAuth ────────────────────────────────────────────────────────────────
-oauth = OAuth(app)
-google = oauth.register(
-    name="google",
-    client_id=GOOGLE_CLIENT_ID,
-    client_secret=GOOGLE_CLIENT_SECRET,
-    server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
-    client_kwargs={"scope": "openid email profile https://www.googleapis.com/auth/calendar.readonly"},
-)
-
-# ── DB Teardown ─────────────────────────────────────────────────────────
-from db import close_db, init_db
-app.teardown_appcontext(close_db)
-
 
 @app.after_request
 def add_no_cache_headers(response):
@@ -48,10 +31,18 @@ def add_no_cache_headers(response):
     return response
 
 
-# ── Blueprints ──────────────────────────────────────────────────────────
-from auth import auth_bp
+# ── Database teardown ────────────────────────────────────────────────────
+from db import close_db, init_db
+app.teardown_appcontext(close_db)
+
+
+# ── OAuth (delegated to auth module) ─────────────────────────────────────
+from auth import init_oauth, auth_bp
+init_oauth(app)
 app.register_blueprint(auth_bp)
 
+
+# ── Remaining blueprints ────────────────────────────────────────────────
 from api.clinics import clinics_bp
 app.register_blueprint(clinics_bp)
 
