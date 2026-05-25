@@ -6,7 +6,7 @@ from flask import Blueprint, request, jsonify, session, render_template
 from db import get_db
 from auth import login_required, current_user_id
 from line.helpers import _line_push, _line_quick_reply
-from line.guided import TRIGGER_NEW_CLINIC, STATE_AWAITING_CLINIC, _set_conversation
+from line.guided import start_guided_flow
 
 LINE_LIFF_ID = os.environ.get("LINE_LIFF_ID", "")
 LINE_OA_BASIC_ID = os.environ.get("LINE_OA_BASIC_ID", "")
@@ -134,21 +134,8 @@ def confirm_bind():
     # Send push message to LINE with guided greeting
     line_id = LINE_OA_BASIC_ID.lstrip("@")
 
-    # Look up existing clinics for this user
-    clinics = db.execute(
-        "SELECT id, name FROM clinics WHERE user_id = ? AND deleted = 0 ORDER BY name",
-        (uid,)
-    ).fetchall()
-    items = [(c["name"], c["name"]) for c in clinics][:12]
-    items.append(("+ Add New Clinic", TRIGGER_NEW_CLINIC))
-
-    _set_conversation(db, line_user_id, STATE_AWAITING_CLINIC)
-    _line_push(line_user_id, [
-        _line_quick_reply(
-            "✅ Account linked!\n\nLet's log your first entry.\n\nWhich clinic?",
-            items
-        )
-    ])
+    msg = start_guided_flow(db, line_user_id, uid)
+    _line_push(line_user_id, [msg])
 
     return jsonify({
         "bound": True,

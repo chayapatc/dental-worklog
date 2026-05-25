@@ -1,4 +1,12 @@
-"""Guided logging flow — Quick Reply state machine."""
+"""Guided logging flow — Quick Reply state machine.
+
+Public interface (3 functions):
+  handle_guided_message(db, text, line_user_id, reply_token, user_id) -> Response | None
+  start_guided_flow(db, line_user_id, user_id) -> dict
+  is_in_guided_flow(db, line_user_id) -> bool
+
+Everything else is private implementation.
+"""
 
 import os, re
 from datetime import datetime, timezone, timedelta
@@ -8,40 +16,51 @@ from db import get_db
 
 APP_URL = os.environ.get("APP_URL", "http://localhost:5199")
 
+# ── Internal constants ────────────────────────────────────────────────────
 
-# ── Guided Logging Flow (Quick Reply) ─────────────────────────────────────
+_STATE_CLINIC = "awaiting_clinic"
+_STATE_NEW_CLINIC = "awaiting_new_clinic"
+_STATE_HOURS = "awaiting_hours"
+_STATE_INCOME = "awaiting_income"
+_STATE_DATE = "awaiting_date"
 
-# Conversation states
-STATE_AWAITING_CLINIC = "awaiting_clinic"
-STATE_AWAITING_NEW_CLINIC = "awaiting_new_clinic"
-STATE_AWAITING_HOURS = "awaiting_hours"
-STATE_AWAITING_INCOME = "awaiting_income"
-STATE_AWAITING_DATE = "awaiting_date"
+_TRIGGER_NEW_CLINIC = "__new_clinic__"
+_TRIGGER_LOG_TODAY = "__log_today__"
+_TRIGGER_HOURS_PREFIX = "__hours_"
+_TRIGGER_DATE_TODAY = "__date_today__"
+_TRIGGER_DATE_YESTERDAY = "__date_yesterday__"
 
-# Trigger words (sent by Quick Reply buttons, hidden from user)
-TRIGGER_NEW_CLINIC = "__new_clinic__"
-TRIGGER_LOG_TODAY = "__log_today__"
-TRIGGER_HOURS_PREFIX = "__hours_"
-TRIGGER_DATE_TODAY = "__date_today__"
-TRIGGER_DATE_YESTERDAY = "__date_yesterday__"
+# ── Public interface (3 functions) ────────────────────────────────────────
+
+def handle_guided_message(db, text: str, line_user_id: str, reply_token: str, user_id: int):
+    """Process one turn of the guided flow. Returns reply dict if handled, None if not."""
+    return _handle_guided_flow(db, reply_token, line_user_id, user_id, text)
 
 
-def _line_quick_reply(text: str, items: list) -> dict:
-    """Build a LINE text message with Quick Reply buttons."""
-    return {
-        "type": "text",
-        "text": text,
-        "quickReply": {
-            "items": [
-                {"type": "action", "action": {"type": "message", "label": label, "text": text}}
-                for label, text in items
-            ]
-        }
-    }
+def start_guided_flow(db, line_user_id: str, user_id: int) -> dict:
+    """Begin guided flow and return the opening Quick Reply message.
+    Caller sends this via _line_push or _line_reply."""
+    clinics = db.execute(
+        "SELECT id, name FROM clinics WHERE user_id = ? AND deleted = 0 ORDER BY name",
+        (user_id,)
+    ).fetchall()
+    items = [(c["name"], c["name"]) for c in clinics][:12]
+    items.append(("+ Add New Clinic", _TRIGGER_NEW_CLINIC))
+    _set_conversation(db, line_user_id, _STATE_CLINIC)
+    return _line_quick_reply(
+        "✅ Account linked!\n\nLet's log your first entry.\n\nWhich clinic?",
+        items
+    )
 
+
+def is_in_guided_flow(db, line_user_id: str) -> bool:
+    """Check if this LINE user has an active guided flow session."""
+    return _get_conversation(db, line_user_id) is not None
+
+
+# ── Private implementation ────────────────────────────────────────────────
 
 def _auto_create_clinic(db, user_id: int, name: str) -> dict:
-    """Create a clinic from chat input. Returns the new clinic row dict."""
     cursor = db.execute(
         "INSERT INTO clinics (user_id, name) VALUES (?, ?)",
         (user_id, name)
@@ -59,7 +78,6 @@ def _get_conversation(db, line_user_id: str) -> dict | None:
 
 
 def _set_conversation(db, line_user_id: str, state: str, **kwargs):
-    """Upsert conversation state."""
     data = {
         "line_user_id": line_user_id,
         "state": state,
@@ -96,13 +114,25 @@ def _mark_first_log_done(db, user_id: int):
     db.commit()
 
 
+def _build_work_date(date_str: str | None, tz) -> str | None:
+    if date_str:
+        month, day = date_str.split("-")
+        year = datetime.now(tz).year
+        try:
+            full = f"{year}-{month}-{day}"
+            datetime.strptime(full, "%Y-%m-%d")
+            return full
+        except ValueError:
+            return None
+    return datetime.now(tz).strftime("%Y-%m-%d")
+
+
 def _handle_guided_flow(db, reply_token, line_user_id, user_id, text):
-    """Process one turn of the guided logging flow."""
     conv = _get_conversation(db, line_user_id)
     bangkok_tz = timezone(timedelta(hours=7))
 
-    # --- Entry: Start guided flow ---
-    if text.strip() == TRIGGER_LOG_TODAY or (
+    # Entry: start guided flow
+    if text.strip() == _TRIGGER_LOG_TODAY or (
         conv is None and text.strip().lower() in ("log", "🕐 log today", "log today")
     ):
         clinics = db.execute(
@@ -110,56 +140,50 @@ def _handle_guided_flow(db, reply_token, line_user_id, user_id, text):
             (user_id,)
         ).fetchall()
         items = [(c["name"], c["name"]) for c in clinics][:12]
-        items.append(("+ Add New Clinic", TRIGGER_NEW_CLINIC))
-        _set_conversation(db, line_user_id, STATE_AWAITING_CLINIC)
+        items.append(("+ Add New Clinic", _TRIGGER_NEW_CLINIC))
+        _set_conversation(db, line_user_id, _STATE_CLINIC)
         _line_reply(reply_token, [_line_quick_reply("Which clinic?", items)])
         return
 
     if conv is None:
-        return False  # Not in guided flow — caller should try text parsing
+        return False  # Not in guided flow
 
     state = conv["state"]
 
-    # --- State: AWAITING_CLINIC ---
-    if state == STATE_AWAITING_CLINIC:
-        if text.strip() == TRIGGER_NEW_CLINIC:
-            _set_conversation(db, line_user_id, STATE_AWAITING_NEW_CLINIC)
+    # State: AWAITING_CLINIC
+    if state == _STATE_CLINIC:
+        if text.strip() == _TRIGGER_NEW_CLINIC:
+            _set_conversation(db, line_user_id, _STATE_NEW_CLINIC)
             _line_reply(reply_token, [{"type": "text", "text": "Type the new clinic name:"}])
             return
-
-        # User tapped a clinic name
         clinics = db.execute(
             "SELECT id, name FROM clinics WHERE user_id = ? AND deleted = 0",
             (user_id,)
         ).fetchall()
         matched = _fuzzy_match_clinic(text.strip(), [dict(c) for c in clinics])
         if not matched:
-            # Try auto-create
             matched = _auto_create_clinic(db, user_id, text.strip())
-        _set_conversation(db, line_user_id, STATE_AWAITING_HOURS, clinic_name=matched["name"])
+        _set_conversation(db, line_user_id, _STATE_HOURS, clinic_name=matched["name"])
         items = [
-            ("1h", TRIGGER_HOURS_PREFIX + "1"),
-            ("2h", TRIGGER_HOURS_PREFIX + "2"),
-            ("3h", TRIGGER_HOURS_PREFIX + "3"),
-            ("4h", TRIGGER_HOURS_PREFIX + "4"),
-            ("5h", TRIGGER_HOURS_PREFIX + "5"),
-            ("6h", TRIGGER_HOURS_PREFIX + "6"),
-            ("7h", TRIGGER_HOURS_PREFIX + "7"),
-            ("8h", TRIGGER_HOURS_PREFIX + "8"),
-            ("Custom", TRIGGER_HOURS_PREFIX + "custom"),
+            ("1h", _TRIGGER_HOURS_PREFIX + "1"),
+            ("2h", _TRIGGER_HOURS_PREFIX + "2"),
+            ("3h", _TRIGGER_HOURS_PREFIX + "3"),
+            ("4h", _TRIGGER_HOURS_PREFIX + "4"),
+            ("5h", _TRIGGER_HOURS_PREFIX + "5"),
+            ("6h", _TRIGGER_HOURS_PREFIX + "6"),
+            ("7h", _TRIGGER_HOURS_PREFIX + "7"),
+            ("8h", _TRIGGER_HOURS_PREFIX + "8"),
+            ("Custom", _TRIGGER_HOURS_PREFIX + "custom"),
         ]
-        _line_reply(reply_token, [_line_quick_reply(
-            f"{matched['name']} — how many hours?", items
-        )])
+        _line_reply(reply_token, [_line_quick_reply(f"{matched['name']} — how many hours?", items)])
         return
 
-    # --- State: AWAITING_NEW_CLINIC ---
-    if state == STATE_AWAITING_NEW_CLINIC:
+    # State: AWAITING_NEW_CLINIC
+    if state == _STATE_NEW_CLINIC:
         name = text.strip()
         if not name:
             _line_reply(reply_token, [{"type": "text", "text": "Please type a clinic name:"}])
             return
-        # Check if already exists
         clinics = db.execute(
             "SELECT id, name FROM clinics WHERE user_id = ? AND deleted = 0",
             (user_id,)
@@ -167,28 +191,26 @@ def _handle_guided_flow(db, reply_token, line_user_id, user_id, text):
         matched = _fuzzy_match_clinic(name, [dict(c) for c in clinics])
         if not matched:
             matched = _auto_create_clinic(db, user_id, name)
-        _set_conversation(db, line_user_id, STATE_AWAITING_HOURS, clinic_name=matched["name"])
+        _set_conversation(db, line_user_id, _STATE_HOURS, clinic_name=matched["name"])
         items = [
-            ("1h", TRIGGER_HOURS_PREFIX + "1"),
-            ("2h", TRIGGER_HOURS_PREFIX + "2"),
-            ("3h", TRIGGER_HOURS_PREFIX + "3"),
-            ("4h", TRIGGER_HOURS_PREFIX + "4"),
-            ("5h", TRIGGER_HOURS_PREFIX + "5"),
-            ("6h", TRIGGER_HOURS_PREFIX + "6"),
-            ("7h", TRIGGER_HOURS_PREFIX + "7"),
-            ("8h", TRIGGER_HOURS_PREFIX + "8"),
-            ("Custom", TRIGGER_HOURS_PREFIX + "custom"),
+            ("1h", _TRIGGER_HOURS_PREFIX + "1"),
+            ("2h", _TRIGGER_HOURS_PREFIX + "2"),
+            ("3h", _TRIGGER_HOURS_PREFIX + "3"),
+            ("4h", _TRIGGER_HOURS_PREFIX + "4"),
+            ("5h", _TRIGGER_HOURS_PREFIX + "5"),
+            ("6h", _TRIGGER_HOURS_PREFIX + "6"),
+            ("7h", _TRIGGER_HOURS_PREFIX + "7"),
+            ("8h", _TRIGGER_HOURS_PREFIX + "8"),
+            ("Custom", _TRIGGER_HOURS_PREFIX + "custom"),
         ]
-        _line_reply(reply_token, [_line_quick_reply(
-            f"{matched['name']} added! How many hours?", items
-        )])
+        _line_reply(reply_token, [_line_quick_reply(f"{matched['name']} added! How many hours?", items)])
         return
 
-    # --- State: AWAITING_HOURS ---
-    if state == STATE_AWAITING_HOURS:
+    # State: AWAITING_HOURS
+    if state == _STATE_HOURS:
         t = text.strip()
-        if t.startswith(TRIGGER_HOURS_PREFIX):
-            val = t[len(TRIGGER_HOURS_PREFIX):]
+        if t.startswith(_TRIGGER_HOURS_PREFIX):
+            val = t[len(_TRIGGER_HOURS_PREFIX):]
             if val == "custom":
                 _line_reply(reply_token, [{"type": "text", "text": "Type the hours (e.g. 4.5):"}])
                 return
@@ -199,41 +221,38 @@ def _handle_guided_flow(db, reply_token, line_user_id, user_id, text):
             except ValueError:
                 _line_reply(reply_token, [{"type": "text", "text": "Please enter a number (e.g. 4 or 4.5):"}])
                 return
-        _set_conversation(db, line_user_id, STATE_AWAITING_INCOME,
+        _set_conversation(db, line_user_id, _STATE_INCOME,
                          clinic_name=conv["clinic_name"], hours=hours)
         _line_reply(reply_token, [{"type": "text", "text": "Income today? (type amount, e.g. 5000)"}])
         return
 
-    # --- State: AWAITING_INCOME ---
-    if state == STATE_AWAITING_INCOME:
+    # State: AWAITING_INCOME
+    if state == _STATE_INCOME:
         try:
             income = float(text.strip())
         except ValueError:
             _line_reply(reply_token, [{"type": "text", "text": "Please enter a number (e.g. 5000):"}])
             return
-        _set_conversation(db, line_user_id, STATE_AWAITING_DATE,
-                         clinic_name=conv["clinic_name"], hours=conv["hours"],
-                         income=income)
-        yesterday = (datetime.now(bangkok_tz) - timedelta(days=1)).day
+        _set_conversation(db, line_user_id, _STATE_DATE,
+                         clinic_name=conv["clinic_name"], hours=conv["hours"], income=income)
         items = [
-            ("Today", TRIGGER_DATE_TODAY),
-            ("Yesterday", TRIGGER_DATE_YESTERDAY),
+            ("Today", _TRIGGER_DATE_TODAY),
+            ("Yesterday", _TRIGGER_DATE_YESTERDAY),
         ]
         _line_reply(reply_token, [_line_quick_reply(
-            "Date? (or type date number e.g. 22 or 22/5)", items
+            "Date? (type 22 or 22/5)", items
         )])
         return
 
-    # --- State: AWAITING_DATE ---
-    if state == STATE_AWAITING_DATE:
+    # State: AWAITING_DATE
+    if state == _STATE_DATE:
         t = text.strip()
-        if t == TRIGGER_DATE_TODAY:
+        if t == _TRIGGER_DATE_TODAY:
             date_str = None
-        elif t == TRIGGER_DATE_YESTERDAY:
+        elif t == _TRIGGER_DATE_YESTERDAY:
             yesterday = datetime.now(bangkok_tz) - timedelta(days=1)
             date_str = f"{yesterday.month:02d}-{yesterday.day:02d}"
         else:
-            # Try d/m or d-alone
             m = re.match(r'^(\d{1,2})/(\d{1,2})$', t)
             if m:
                 day, month = int(m.group(1)), int(m.group(2))
@@ -253,7 +272,6 @@ def _handle_guided_flow(db, reply_token, line_user_id, user_id, text):
                 _line_reply(reply_token, [{"type": "text", "text": "Type a day (22) or d/m (22/5) or tap Today:"}])
                 return
 
-        # All data collected — create the log
         work_date = _build_work_date(date_str, bangkok_tz)
         if work_date is None:
             _line_reply(reply_token, [{"type": "text", "text": "Invalid date. Try again."}])
@@ -264,7 +282,6 @@ def _handle_guided_flow(db, reply_token, line_user_id, user_id, text):
         income = float(conv["income"])
         expense = float(conv.get("expense", 0))
 
-        # Find clinic (may have been auto-created, look it up)
         clinics = db.execute(
             "SELECT id, name FROM clinics WHERE user_id = ? AND deleted = 0",
             (user_id,)
@@ -279,7 +296,6 @@ def _handle_guided_flow(db, reply_token, line_user_id, user_id, text):
         )
         db.commit()
 
-        # Send confirmation
         net = income - expense
         rate = f"฿{int(net/hours)}/h" if hours > 0 else "-"
         is_first = _is_first_log(db, user_id)
@@ -307,20 +323,4 @@ def _handle_guided_flow(db, reply_token, line_user_id, user_id, text):
             )}])
         return
 
-    return False  # Unknown state — fall through
-
-
-def _build_work_date(date_str: str | None, tz) -> str | None:
-    """Build YYYY-MM-DD from MM-DD date_str + current year, or today if None."""
-    if date_str:
-        month, day = date_str.split("-")
-        year = datetime.now(tz).year
-        try:
-            full = f"{year}-{month}-{day}"
-            datetime.strptime(full, "%Y-%m-%d")
-            return full
-        except ValueError:
-            return None
-    return datetime.now(tz).strftime("%Y-%m-%d")
-
-
+    return False  # Unknown state

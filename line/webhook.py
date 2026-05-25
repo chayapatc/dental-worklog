@@ -6,12 +6,7 @@ from flask import Blueprint, request, jsonify
 from db import get_db
 from line.parser import _parse_log_message, _fuzzy_match_clinic
 from line.helpers import _line_reply, _line_push, _line_verify_signature, _line_quick_reply
-from line.guided import (
-    TRIGGER_LOG_TODAY, TRIGGER_NEW_CLINIC, TRIGGER_HOURS_PREFIX,
-    TRIGGER_DATE_TODAY, TRIGGER_DATE_YESTERDAY,
-    _handle_guided_flow, _get_conversation, _clear_conversation,
-    _auto_create_clinic, _build_work_date, _is_first_log, _mark_first_log_done,
-)
+from line.guided import handle_guided_message, is_in_guided_flow, _clear_conversation, _auto_create_clinic, _build_work_date, _is_first_log, _mark_first_log_done
 
 LINE_CHANNEL_SECRET = os.environ.get("LINE_CHANNEL_SECRET", "")
 LIFF_ID = os.environ.get("LINE_LIFF_ID", "")
@@ -88,15 +83,12 @@ def line_webhook():
         user_id = user_row["id"]
 
         # --- Try guided flow first ---
-        conv = _get_conversation(db, line_user_id)
-        if conv is not None or text.strip().lower() in ("log", "🕐 log today", "log today") or \
-           text.strip() in (TRIGGER_LOG_TODAY, TRIGGER_NEW_CLINIC) or \
-           text.strip().startswith(TRIGGER_HOURS_PREFIX) or \
-           text.strip() in (TRIGGER_DATE_TODAY, TRIGGER_DATE_YESTERDAY):
+        if is_in_guided_flow(db, line_user_id) or text.strip().lower() in ("log", "🕐 log today", "log today") or \
+           text.strip().startswith("__"):
             try:
-                result = _handle_guided_flow(db, reply_token, line_user_id, user_id, text)
+                result = handle_guided_message(db, text, line_user_id, reply_token, user_id)
                 if result is not False:
-                    continue  # Handled by guided flow
+                    continue
             except Exception as e:
                 _clear_conversation(db, line_user_id)
                 _line_reply(reply_token, [{"type": "text", "text": "Something went wrong. Try again: vela 4 5000"}])
