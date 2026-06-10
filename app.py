@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Dental Worklog — Flask + SQLite + Google OAuth (blueprint shell)."""
 
+import os
 import secrets
+import subprocess
 
 from dotenv import load_dotenv
 from flask import Flask
@@ -40,6 +42,23 @@ app.teardown_appcontext(close_db)
 from auth import init_oauth, auth_bp
 init_oauth(app)
 app.register_blueprint(auth_bp)
+
+
+# ── Static cache-busting ────────────────────────────────────────────────
+def _git_version():
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=os.path.dirname(__file__), text=True
+        ).strip()
+    except Exception:
+        return "dev"
+
+VERSION = _git_version()
+
+@app.context_processor
+def inject_version():
+    return dict(version=VERSION)
 
 
 # ── Remaining blueprints ────────────────────────────────────────────────
