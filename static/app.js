@@ -684,19 +684,21 @@ async function refreshMonthly() {
     const data = await api(`/api/reports/monthly-summary?year=${year}`);
     const months = data.months;
 
-    let totalIncome = 0, totalExpense = 0, totalNet = 0;
+    let totalIncome = 0, totalExpense = 0, totalNet = 0, totalHours = 0;
     months.forEach(m => {
       totalIncome += m.income;
       totalExpense += m.expense;
       totalNet += m.net;
+      totalHours += m.hours || 0;
     });
     document.getElementById("monthly-totals").innerHTML =
-      `Total income: ฿${totalIncome.toLocaleString()} &nbsp;|&nbsp; Expenses: ฿${totalExpense.toLocaleString()} &nbsp;|&nbsp; Net: <strong>฿${totalNet.toLocaleString()}</strong>`;
+      `Hours: ${totalHours} &nbsp;|&nbsp; Total income: ฿${totalIncome.toLocaleString()} &nbsp;|&nbsp; Expenses: ฿${totalExpense.toLocaleString()} &nbsp;|&nbsp; Net: <strong>฿${totalNet.toLocaleString()}</strong>`;
 
     const labels = months.map(m => m.label);
     const incomeData = months.map(m => m.income);
     const expenseData = months.map(m => m.expense);
     const netData = months.map(m => m.net);
+    const hoursData = months.map(m => m.hours || 0);
 
     if (monthlyChart) monthlyChart.destroy();
     const ctx = document.getElementById("monthly-chart").getContext("2d");
@@ -735,6 +737,20 @@ async function refreshMonthly() {
             tension: 0.3,
             order: 0,
           },
+          {
+            label: "Hours",
+            data: hoursData,
+            type: "line",
+            borderColor: "#c084fc",
+            backgroundColor: "transparent",
+            borderWidth: 2,
+            borderDash: [5, 5],
+            pointRadius: 3,
+            pointBackgroundColor: "#c084fc",
+            tension: 0.3,
+            yAxisID: "y-hours",
+            order: 0,
+          },
         ],
       },
       options: {
@@ -745,7 +761,9 @@ async function refreshMonthly() {
           legend: { labels: { color: "#94a3b8", boxWidth: 12, padding: 12 } },
           tooltip: {
             callbacks: {
-              label: ctx => `${ctx.dataset.label}: ฿${ctx.raw.toLocaleString()}`,
+              label: ctx => ctx.dataset.label === "Hours"
+                ? `${ctx.dataset.label}: ${ctx.raw.toFixed(0)}h`
+                : `${ctx.dataset.label}: ฿${ctx.raw.toLocaleString()}`,
             },
           },
         },
@@ -757,6 +775,13 @@ async function refreshMonthly() {
           y: {
             ticks: { color: "#64748b", callback: v => "฿" + v.toLocaleString() },
             grid: { color: "rgba(255,255,255,0.06)" },
+          },
+          "y-hours": {
+            type: "linear",
+            position: "right",
+            title: { display: true, text: "Hours", color: "#c084fc" },
+            ticks: { color: "#c084fc", stepSize: 10 },
+            grid: { drawOnChartArea: false },
           },
         },
       },

@@ -201,18 +201,19 @@ def monthly_summary():
     uid = current_user_id()
 
     rows = db.execute("""
-        SELECT wl.date, wl.income, wl.expense
+        SELECT wl.date, wl.income, wl.expense, wl.hours
         FROM work_logs wl
         WHERE wl.user_id = ? AND wl.date >= ? AND wl.date < ?
     """, (uid, f"{year}-01-01", f"{year + 1}-01-01")).fetchall()
 
-    months = [{"month": m, "income": 0.0, "expense": 0.0, "net": 0.0} for m in range(1, 13)]
+    months = [{"month": m, "income": 0.0, "expense": 0.0, "net": 0.0, "hours": 0.0} for m in range(1, 13)]
     for r in rows:
         try:
             m = int(r["date"].split("-")[1])
             months[m - 1]["income"] += r["income"]
             months[m - 1]["expense"] += r["expense"]
             months[m - 1]["net"] += r["income"] - r["expense"]
+            months[m - 1]["hours"] += r["hours"]
         except (ValueError, IndexError):
             continue
 
