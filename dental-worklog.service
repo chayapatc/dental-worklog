@@ -6,8 +6,10 @@ After=network.target
 User=chayapatc
 Group=www-data
 WorkingDirectory=/opt/dental-worklog
-Environment="PATH=/opt/dental-worklog"
-ExecStart=/usr/bin/gunicorn --workers 2 --bind 127.0.0.1:8000 app:app
+# Keep normal PATH entries: the app shells out to git for static cache-busting,
+# and a PATH containing only the app dir makes that lookup fail silently.
+Environment="PATH=/opt/dental-worklog:/usr/local/bin:/usr/bin:/bin"
+ExecStart=/home/chayapatc/.local/bin/gunicorn --workers 2 --bind 127.0.0.1:8000 app:app
 Restart=always
 RestartSec=3
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Dental Worklog — Flask + SQLite + Google OAuth (blueprint shell)."""
 
+import hashlib
 import os
 import secrets
 import subprocess
@@ -78,11 +79,32 @@ app.register_blueprint(auth_bp)
 
 # ── Static cache-busting ────────────────────────────────────────────────
 def _git_version():
+    """Cache-busting token for /static URLs.
+
+    Prefers the git commit. Falls back to a fingerprint of the static files
+    when git is unavailable — a systemd unit with a minimal PATH can't find
+    git, and a constant like "dev" would freeze stale assets in browsers once
+    /static is served with a long cache lifetime.
+    """
+    root = os.path.dirname(os.path.abspath(__file__))
+    for exe in ("git", "/usr/bin/git", "/usr/local/bin/git"):
+        try:
+            out = subprocess.check_output(
+                [exe, "rev-parse", "--short", "HEAD"],
+                cwd=root, text=True, stderr=subprocess.DEVNULL,
+            ).strip()
+            if out:
+                return out
+        except Exception:
+            continue
+
     try:
-        return subprocess.check_output(
-            ["git", "rev-parse", "--short", "HEAD"],
-            cwd=os.path.dirname(__file__), text=True
-        ).strip()
+        digest = hashlib.sha256()
+        static_dir = os.path.join(root, "static")
+        for name in sorted(os.listdir(static_dir)):
+            st = os.stat(os.path.join(static_dir, name))
+            digest.update(f"{name}:{st.st_size}:{st.st_mtime_ns}".encode())
+        return digest.hexdigest()[:7]
     except Exception:
         return "dev"
 
