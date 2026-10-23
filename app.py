@@ -6,7 +6,7 @@ import secrets
 import subprocess
 
 from dotenv import load_dotenv
-from flask import Flask
+from flask import Flask, request
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 load_dotenv()
@@ -25,9 +25,13 @@ app.config.update(
 
 
 @app.after_request
-def add_no_cache_headers(response):
-    if response.content_type and "text/html" in response.content_type:
-        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+def add_cache_headers(response):
+    if request.path.startswith("/static/"):
+        # Static URLs carry ?v=<git hash>, so a new deploy is a new URL.
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    elif response.content_type and "text/html" in response.content_type:
+        # Revalidate HTML, but never no-store: it would block the bfcache.
+        response.headers["Cache-Control"] = "no-cache, must-revalidate"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
     return response

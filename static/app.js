@@ -6,6 +6,26 @@ let trendsChart = null;
 let monthlyChart = null;
 let currentUser = null;
 
+// Chart.js is only needed on the Trends and Monthly P&L views — load it on
+// demand so the login and logging screens never download it.
+let chartJsPromise = null;
+function ensureChartJs() {
+  if (window.Chart) return Promise.resolve();
+  if (!chartJsPromise) {
+    chartJsPromise = new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = "/static/chart.umd.min.js";
+      s.onload = () => resolve();
+      s.onerror = () => {
+        chartJsPromise = null;
+        reject(new Error("Chart.js failed to load"));
+      };
+      document.head.appendChild(s);
+    });
+  }
+  return chartJsPromise;
+}
+
 // HTML Escaping Utility to prevent XSS
 function escapeHtml(str) {
   if (str === null || str === undefined) return "";
@@ -586,7 +606,8 @@ async function refreshTrends() {
       }).join("");
     }
 
-    // Chart
+    // Chart (Chart.js is fetched on first use)
+    await ensureChartJs();
     if (trendsChart) trendsChart.destroy();
     const ctx = document.getElementById("trends-chart").getContext("2d");
     const allClinics = [...new Set(data.map(d => d.clinic_name))];
@@ -700,6 +721,7 @@ async function refreshMonthly() {
     const netData = months.map(m => m.net);
     const hoursData = months.map(m => m.hours || 0);
 
+    await ensureChartJs();
     if (monthlyChart) monthlyChart.destroy();
     const ctx = document.getElementById("monthly-chart").getContext("2d");
     monthlyChart = new Chart(ctx, {

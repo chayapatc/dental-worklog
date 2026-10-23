@@ -4,8 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Dental Worklog</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<meta name="description" content="Log dental clinic shifts — hours, income and expenses — then see which clinic pays you best per hour.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A6%B7%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="/static/pico.min.css?v={{ version }}">
 <style>
   /* ── App Shell ──────────────────────────────────────────────────── */
   body { min-height: 100vh; display: flex; flex-direction: column; }
@@ -418,6 +419,6 @@
 
 <div id="toast" class="toast"></div>
 
-<script src="/static/app.js?v={{ version }}"></script>
+<script defer src="/static/app.js?v={{ version }}"></script>
 </body>
 </html>
