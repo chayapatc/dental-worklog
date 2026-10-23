@@ -1,10 +1,13 @@
 """Database connection, teardown, and migration runner."""
 
+import os
 import sqlite3
 from pathlib import Path
 from flask import g
 
-DATABASE = "dental.db"
+# DB_PATH lets local tooling (sandbox audits, tests) point at a scratch database
+# instead of the real one. Production leaves it unset and gets dental.db.
+DATABASE = os.environ.get("DB_PATH", "dental.db")
 
 
 def get_db():

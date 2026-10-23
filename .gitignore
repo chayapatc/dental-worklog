@@ -2,5 +2,6 @@
 __pycache__/
 *.pyc
 dental.db
+dental-sandbox.db
 DEPLOY.md
 .hermes

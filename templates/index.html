@@ -37,6 +37,18 @@
   .view { display: none; }
   .view.active { display: block; }
 
+  /* ── Theme overrides ──────────────────────────────────────────────── */
+  /* Pico's default muted color fails WCAG AA against the dark surface. */
+  [data-theme="dark"] { --pico-muted-color: #b6c2d4; }
+
+  /* Stable, descriptive line at the top of each report view: gives the page a
+     real text block at first paint (canvas charts are not LCP candidates). */
+  .view-lede {
+    font-size: 0.95rem; line-height: 1.5; color: var(--pico-muted-color);
+    margin: 0 0 1rem;
+  }
+
+
   /* ── Login Screen ───────────────────────────────────────────────── */
   #login-screen {
     flex: 1; display: flex; align-items: center; justify-content: center;
@@ -177,7 +189,7 @@
     table { font-size: 0.8rem; }
     th, td { padding: 0.4rem 0.5rem; }
     .toast { left: 0.75rem; right: 0.75rem; bottom: 7.5rem; max-width: none; margin: 0; }
-    #tracker-calendar { font-size: 0.6rem; gap: 1px; }
+    #tracker-calendar { gap: 1px; }
     #tracker-calendar > div { min-height: 48px !important; padding: 2px !important; }
     #tracker-calendar > div :first-child { font-size: 0.6rem; }
   }
@@ -185,8 +197,8 @@
 </head>
 <body>
 
-<!-- ── Login Screen ──────────────────────────────────────────────────── -->
-<div id="login-screen">
+<!-- ── Login Screen (server decides which screen paints first) ────────── -->
+<div id="login-screen"{% if logged_in %} class="hidden"{% endif %}>
   <div class="logo">🦷</div>
   <h1>Dental Worklog</h1>
   <p>Track your clinic hours and income. See which clinic gives you the best return.</p>
@@ -196,20 +208,20 @@
   </a>
 </div>
 
-<!-- ── App (hidden until login) ──────────────────────────────────────── -->
-<div id="app-screen" class="hidden">
+<!-- ── App (rendered visible when the session already has a user) ─────── -->
+<div id="app-screen"{% if not logged_in %} class="hidden"{% endif %}>
 
 <header class="app-header">
   <h1>🦷 <span class="logo-text">Dental Worklog</span></h1>
   <button id="menu-toggle" class="outline secondary" style="display:none;padding:0.25rem 0.5rem;font-size:1rem;line-height:1;" aria-label="Menu">☰</button>
   <nav id="main-nav">
     <ul>
-      <li><a href="#" data-view="log" class="active">+ Log</a></li>
-      <li><a href="#" data-view="clinics">Clinics</a></li>
-      <li><a href="#" data-view="tracker">Tracker</a></li>
-      <li><a href="#" data-view="trends">Trends</a></li>
-      <li><a href="#" data-view="monthly">Monthly P&amp;L</a></li>
-      <li><a href="#" data-view="income">Net Income Report</a></li>
+      <li><a href="#" data-view="log"{% if initial_view == 'log' %} class="active"{% endif %}>+ Log</a></li>
+      <li><a href="#" data-view="clinics"{% if initial_view == 'clinics' %} class="active"{% endif %}>Clinics</a></li>
+      <li><a href="#" data-view="tracker"{% if initial_view == 'tracker' %} class="active"{% endif %}>Tracker</a></li>
+      <li><a href="#" data-view="trends"{% if initial_view == 'trends' %} class="active"{% endif %}>Trends</a></li>
+      <li><a href="#" data-view="monthly"{% if initial_view == 'monthly' %} class="active"{% endif %}>Monthly P&amp;L</a></li>
+      <li><a href="#" data-view="income"{% if initial_view == 'income' %} class="active"{% endif %}>Net Income Report</a></li>
     </ul>
   </nav>
   <div class="user-area">
@@ -222,32 +234,32 @@
 
 <main class="container">
   <!-- Log Work -->
-  <section id="view-log" class="view active">
+  <section id="view-log" class="view{% if initial_view == 'log' %} active{% endif %}">
     <article>
       <h2>Log Work Session</h2>
       <div class="form-row">
         <div class="field">
-          <label>Clinic</label>
+          <label for="log-clinic">Clinic</label>
           <select id="log-clinic" required><option value="">-- Select --</option></select>
         </div>
         <div class="field">
-          <label>Date</label>
+          <label for="log-date">Date</label>
           <input type="date" id="log-date" required>
         </div>
         <div class="field">
-          <label>Hours</label>
+          <label for="log-hours">Hours</label>
           <input type="number" id="log-hours" step="0.5" min="0" placeholder="e.g. 4">
         </div>
         <div class="field">
-          <label>Income (฿)</label>
+          <label for="log-income">Income (฿)</label>
           <input type="number" id="log-income" step="100" min="0" placeholder="e.g. 5000">
         </div>
         <div class="field">
-          <label>Expense (฿)</label>
+          <label for="log-expense">Expense (฿)</label>
           <input type="number" id="log-expense" step="100" min="0" placeholder="e.g. 500">
         </div>
         <div class="field field-btn">
-          <label>&nbsp;</label>
+          <span aria-hidden="true">&nbsp;</span>
           <button class="primary" onclick="submitLog()">Save</button>
         </div>
       </div>
@@ -258,28 +270,30 @@
         <a href="/api/logs/export" class="outline secondary" style="font-size:0.75rem;padding:0.3rem 0.75rem;border-radius:6px;text-decoration:none;">📥 Export CSV</a>
       </div>
       <div class="table-wrap">
-        <table id="recent-logs" class="striped"><tbody><tr><td class="text-center" colspan="7">No entries yet</td></tr></tbody></table>
+        <table id="recent-logs" class="striped">
+          <thead><tr><th scope="col">Date</th><th scope="col">Clinic</th><th scope="col">Hours</th><th scope="col">Income</th><th scope="col">Expense</th><th scope="col">Rate</th><th scope="col">Actions</th></tr></thead>
+          <tbody><tr><td class="text-center" colspan="7">No entries yet</td></tr></tbody></table>
       </div>
       <div id="pagination-footer"></div>
     </article>
   </section>
 
   <!-- Clinics -->
-  <section id="view-clinics" class="view">
+  <section id="view-clinics" class="view{% if initial_view == 'clinics' %} active{% endif %}">
     <article>
       <h2>Add Clinic</h2>
       <div class="form-row">
         <div class="field">
-          <label>Clinic Name</label>
+          <label for="clinic-name">Clinic Name</label>
           <input type="text" id="clinic-name" placeholder="e.g. Smile Dental Center" required>
         </div>
         <div class="field" style="flex:0 0 auto;min-width:200px;">
-          <label>Color</label>
+          <label for="clinic-color-picker">Color</label>
           <div id="color-swatches" style="display:flex;gap:0.3rem;flex-wrap:wrap;padding-top:0.25rem;"></div>
           <input type="color" id="clinic-color-picker" value="#38bdf8" onchange="selectCustomColor(this.value)" style="width:32px;height:32px;padding:0;border:none;cursor:pointer;margin-top:0.25rem;" title="Custom color">
         </div>
         <div class="field field-btn">
-          <label>&nbsp;</label>
+          <span aria-hidden="true">&nbsp;</span>
           <button class="primary" onclick="addClinic()">Add</button>
         </div>
       </div>
@@ -287,13 +301,15 @@
     <article>
       <h2>All Clinics</h2>
       <div class="table-wrap">
-        <table id="clinics-table" class="striped"><tbody><tr><td class="text-center" colspan="2">No clinics yet</td></tr></tbody></table>
+        <table id="clinics-table" class="striped">
+          <thead><tr><th scope="col">Clinic</th><th scope="col">Actions</th></tr></thead>
+          <tbody><tr><td class="text-center" colspan="2">No clinics yet</td></tr></tbody></table>
       </div>
     </article>
   </section>
 
   <!-- Tracker (monthly calendar) -->
-  <section id="view-tracker" class="view">
+  <section id="view-tracker" class="view{% if initial_view == 'tracker' %} active{% endif %}">
     <article>
       <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1rem;flex-wrap:wrap;">
         <h2 style="margin:0;">Tracker</h2>
@@ -301,15 +317,16 @@
         <div class="field" style="flex:0 0 auto;"><span id="tracker-month-label" style="font-weight:600;"></span></div>
         <div class="field" style="flex:0 0 auto;"><button class="outline secondary" onclick="navTrackerMonth(1)" style="padding:0.2rem 0.6rem;margin-bottom:0;">→</button></div>
       </div>
-      <div id="tracker-calendar" style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;"></div>
-      <div style="margin-top:0.75rem;display:flex;gap:1rem;flex-wrap:wrap;font-size:0.75rem;color:var(--pico-muted-color);">
-        <span>⬤ Clinic log</span><span style="padding-left:4px;border-left:2px solid #f87171;font-size:0.65rem;">Event</span>
+      <div id="tracker-calendar" style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;min-height:340px;"></div>
+      <div style="margin-top:0.75rem;display:flex;gap:1rem;flex-wrap:wrap;font-size:0.8rem;color:var(--pico-muted-color);">
+        <span>⬤ Clinic log</span><span style="padding-left:4px;border-left:2px solid #f87171;font-size:0.8rem;">Event</span>
       </div>
     </article>
   </section>
 
   <!-- Trends (merged Rate + Income Ranking) -->
-  <section id="view-trends" class="view">
+  <section id="view-trends" class="view{% if initial_view == 'trends' %} active{% endif %}">
+    <p class="view-lede">Compare hourly rate and net income across your clinics, period by period. Pick a metric and a window — the chart shows history, the table ranks the current period.</p>
     <!-- Metric toggle -->
     <div class="toggle-group" style="margin-bottom:0.75rem;">
       <button class="active outline" data-trends-metric="rate">Hourly Rate</button>
@@ -330,43 +347,47 @@
       <p style="font-size:0.8rem;color:var(--pico-muted-color);margin-bottom:0.25rem;">🏆 Current period</p>
       <p id="trends-period-label" style="font-size:0.75rem;color:var(--pico-muted-color);margin-bottom:0.5rem;"></p>
       <div class="table-wrap">
-        <table id="trends-table" class="striped"><tbody><tr><td class="text-center" colspan="5">No data yet</td></tr></tbody></table>
+        <table id="trends-table" class="striped">
+          <thead><tr><th scope="col">#</th><th scope="col">Clinic</th><th scope="col">Hours</th><th scope="col">Value</th><th scope="col">Rate</th></tr></thead>
+          <tbody><tr><td class="text-center" colspan="5">No data yet</td></tr></tbody></table>
       </div>
     </article>
   </section>
 
   <!-- Monthly Summary (bar chart + line) -->
-  <section id="view-monthly" class="view">
+  <section id="view-monthly" class="view{% if initial_view == 'monthly' %} active{% endif %}">
     <article>
-      <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1rem;flex-wrap:wrap;">
+      <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.75rem;flex-wrap:wrap;">
         <h2 style="margin:0;">Monthly P&amp;L</h2>
         <div class="field" style="flex:0 0 auto;">
-          <select id="monthly-year" onchange="refreshMonthly()" style="margin-bottom:0;width:auto;"></select>
+          <select id="monthly-year" aria-label="Year" onchange="refreshMonthly()" style="margin-bottom:0;width:auto;"></select>
         </div>
       </div>
-      <p id="monthly-totals" style="font-size:0.85rem;color:var(--pico-muted-color);margin-bottom:1rem;"></p>
+      <p class="view-lede">Income, expenses and net profit for every month of the selected year — bars for money in and out, the line for what you actually kept.</p>
+      <p id="monthly-totals" style="font-size:0.85rem;color:var(--pico-muted-color);margin-bottom:1rem;min-height:1.4em;"></p>
       <div class="chart-box" style="height:380px;"><canvas id="monthly-chart"></canvas></div>
     </article>
   </section>
 
   <!-- Net Income -->
-  <section id="view-income" class="view">
+  <section id="view-income" class="view{% if initial_view == 'income' %} active{% endif %}">
     <article>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:0.5rem;">
         <h2 style="margin:0;">Net Income Report</h2>
         <a href="/api/logs/export" class="outline secondary" style="font-size:0.75rem;padding:0.3rem 0.75rem;border-radius:6px;text-decoration:none;">📥 Export CSV</a>
       </div>
+      <p class="view-lede">Rank your clinics by what they actually paid you between two dates — net income after expenses, with the hourly rate for each.</p>
       <div class="form-row" style="margin-bottom:1rem;">
         <div class="field">
-          <label>Start</label>
+          <label for="income-start">Start</label>
           <input type="date" id="income-start">
         </div>
         <div class="field">
-          <label>End</label>
+          <label for="income-end">End</label>
           <input type="date" id="income-end">
         </div>
         <div class="field field-btn">
-          <label>&nbsp;</label>
+          <span aria-hidden="true">&nbsp;</span>
           <button class="primary" onclick="refreshIncomeRanking()">Apply</button>
         </div>
       </div>
@@ -382,22 +403,22 @@
 
 <nav class="bottom-nav">
   <div class="bottom-nav-scroll" id="bottom-nav-scroll">
-    <a href="#" data-view="log" class="active">
+    <a href="#" data-view="log"{% if initial_view == 'log' %} class="active"{% endif %}>
       <span class="nav-icon">✚</span>+ Log
     </a>
-    <a href="#" data-view="clinics">
+    <a href="#" data-view="clinics"{% if initial_view == 'clinics' %} class="active"{% endif %}>
       <span class="nav-icon">🏥</span>Clinics
     </a>
-    <a href="#" data-view="tracker">
+    <a href="#" data-view="tracker"{% if initial_view == 'tracker' %} class="active"{% endif %}>
       <span class="nav-icon">📅</span>Tracker
     </a>
-    <a href="#" data-view="trends">
+    <a href="#" data-view="trends"{% if initial_view == 'trends' %} class="active"{% endif %}>
       <span class="nav-icon">📈</span>Trends
     </a>
-    <a href="#" data-view="monthly">
+    <a href="#" data-view="monthly"{% if initial_view == 'monthly' %} class="active"{% endif %}>
       <span class="nav-icon">📊</span>Monthly
     </a>
-    <a href="#" data-view="income">
+    <a href="#" data-view="income"{% if initial_view == 'income' %} class="active"{% endif %}>
       <span class="nav-icon">💰</span>Income
     </a>
   </div>

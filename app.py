@@ -6,7 +6,7 @@ import secrets
 import subprocess
 
 from dotenv import load_dotenv
-from flask import Flask, request
+from flask import Flask, request, session
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 load_dotenv()
@@ -26,9 +26,13 @@ app.config.update(
 
 @app.after_request
 def add_cache_headers(response):
-    if request.path.startswith("/static/"):
+    if request.path.startswith("/static/") and not app.debug:
         # Static URLs carry ?v=<git hash>, so a new deploy is a new URL.
+        # While debug is on the hash doesn't move with every edit, so
+        # caching there would serve stale assets during development.
         response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    elif request.path.startswith("/static/"):
+        response.headers["Cache-Control"] = "no-cache, must-revalidate"
     elif response.content_type and "text/html" in response.content_type:
         # Revalidate HTML, but never no-store: it would block the bfcache.
         response.headers["Cache-Control"] = "no-cache, must-revalidate"
@@ -40,6 +44,30 @@ def add_cache_headers(response):
 # ── Database teardown ────────────────────────────────────────────────────
 from db import close_db, init_db
 app.teardown_appcontext(close_db)
+
+
+# ── Sandbox auto-login (local development only) ──────────────────────────
+# Lets Lighthouse and manual QA reach the authenticated views without a real
+# Google session. Two independent conditions must hold: SANDBOX_AUTH=1 in the
+# environment AND debug mode on the request. gunicorn runs with debug off, so
+# a deployed instance can never auto-login even if the variable leaks in.
+SANDBOX_AUTH = os.environ.get("SANDBOX_AUTH") == "1"
+if SANDBOX_AUTH:
+    print("⚠️  SANDBOX_AUTH=1 set — auto-login only applies while debug is on")
+
+
+@app.before_request
+def _sandbox_auto_login():
+    if not SANDBOX_AUTH or not app.debug:
+        return
+    if session.get("user_id"):
+        return
+    from db import get_db
+    row = get_db().execute(
+        "SELECT id FROM users WHERE google_id='sandbox'"
+    ).fetchone()
+    if row:
+        session["user_id"] = row["id"]
 
 
 # ── OAuth (delegated to auth module) ─────────────────────────────────────

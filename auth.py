@@ -104,4 +104,14 @@ def auth_logout():
 
 @auth_bp.route("/")
 def index():
-    return render_template("index.html")
+    # ?view=<name> deep links straight to a tab. Resolving it here means the
+    # correct view is active on first paint — no flash of another tab, and a
+    # stable Largest Contentful Paint candidate.
+    view = request.args.get("view", "log")
+    if view not in {"log", "clinics", "tracker", "trends", "monthly", "income"}:
+        view = "log"
+    # The session cookie already knows whether someone is signed in, so render
+    # the right screen immediately instead of flashing a loader and swapping.
+    return render_template(
+        "index.html", initial_view=view, logged_in=bool(session.get("user_id"))
+    )

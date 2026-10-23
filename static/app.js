@@ -74,7 +74,14 @@ async function checkAuth() {
     if (user && user.id) {
       currentUser = user;
       showApp();
-      refreshLogView();
+      // Deep link: /?view=trends opens that view directly. Lets each view be
+      // audited and bookmarked on its own URL.
+      const requested = new URLSearchParams(window.location.search).get("view");
+      if (requested && document.getElementById("view-" + requested)) {
+        switchTab(requested);
+      } else {
+        refreshLogView();
+      }
     } else {
       showLogin();
     }
@@ -135,11 +142,20 @@ function logout() {
 
 // ── Navigation ──────────────────────────────────────────────────────────
 function switchTab(view) {
-  document.querySelectorAll("nav [data-view], .bottom-nav [data-view]").forEach(b => b.classList.remove("active"));
-  document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
-  document.getElementById("view-" + view).classList.add("active");
-  // Mark active on both top nav and bottom nav
-  document.querySelectorAll(`[data-view="${view}"]`).forEach(el => el.classList.add("active"));
+  const target = document.getElementById("view-" + view);
+  if (!target) return;
+  // Deep links render the target view server-side, so it may already be
+  // active. Hiding every view and re-showing it would throw away the painted
+  // content (and invalidate Largest Contentful Paint) for no reason.
+  const alreadyActive = target.classList.contains("active");
+  target.classList.add("active");
+  if (!alreadyActive) {
+    document.querySelectorAll(".view").forEach(v => { if (v !== target) v.classList.remove("active"); });
+  }
+  // Mark the matching tab active on both top nav and bottom nav
+  document.querySelectorAll("nav [data-view], .bottom-nav [data-view]").forEach(el => {
+    el.classList.toggle("active", el.dataset.view === view);
+  });
   if (view === "log") refreshLogView();
   if (view === "clinics") refreshClinics();
   if (view === "tracker") refreshTracker();
@@ -404,8 +420,8 @@ function editLog(id) {
     <td style="text-align:right"><input type="number" value="${log.expense}" id="edit-expense-${id}" step="100" min="0" style="margin:0;padding:0.2rem;font-size:0.75rem;width:80px;text-align:right;"></td>
     <td>-</td>
     <td style="text-align:center;white-space:nowrap;">
-      <button class="primary" style="padding:0.1rem 0.4rem;font-size:0.65rem;" onclick="saveEditLog(${id})">Save</button>
-      <button class="outline secondary" style="padding:0.1rem 0.4rem;font-size:0.65rem;" onclick="refreshRecentLogs()">Cancel</button>
+      <button class="primary" style="padding:0.1rem 0.4rem;font-size:0.75rem;" onclick="saveEditLog(${id})">Save</button>
+      <button class="outline secondary" style="padding:0.1rem 0.4rem;font-size:0.75rem;" onclick="refreshRecentLogs()">Cancel</button>
     </td>`;
 }
 
@@ -875,24 +891,27 @@ async function refreshTracker() {
         const evs = evMap[dateStr] || [];
 
         let cellStyle = "min-height:52px;padding:3px 4px;background:var(--pico-card-background-color);border:1px solid var(--pico-card-border-color);overflow:hidden;";
-        if (!isCurrentMonth) cellStyle += "opacity:0.35;";
         if (isToday) cellStyle += "box-shadow:inset 0 0 0 2px var(--pico-primary-background);";
 
-        let content = `<div style="font-size:0.7rem;font-weight:${isToday?'700':'400'};color:${isCurrentMonth?'var(--pico-color)':'var(--pico-muted-color)'};margin-bottom:2px;">${dayNum}</div>`;
+        // Out-of-month days stay visually dimmer via a dedicated text color.
+        // Do NOT dim the whole cell with opacity: that drops every child
+        // (day number, event text) below WCAG AA contrast.
+        const dayColor = isCurrentMonth ? "var(--pico-color)" : "#8f9aab";
+        let content = `<div style="font-size:0.75rem;font-weight:${isToday?'700':'400'};color:${dayColor};margin-bottom:2px;">${dayNum}</div>`;
 
         if (d && d.total > 0) {
           const dots = d.clinics.map(c =>
             `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${c.color};margin:0 1px;" title="${escapeHtml(c.clinic_name)}: ${c.count}"></span>`
           ).join("");
-          content += `<div style="display:flex;align-items:center;gap:2px;margin-bottom:1px;">${dots}<span style="font-weight:700;font-size:0.6rem;color:var(--pico-primary-background);">${d.total}</span></div>`;
+          content += `<div style="display:flex;align-items:center;gap:2px;margin-bottom:1px;">${dots}<span style="font-weight:700;font-size:0.75rem;color:var(--pico-primary-background);">${d.total}</span></div>`;
         }
         if (evs.length > 0) {
           content += `<div style="margin-top:2px;">`;
           evs.slice(0,3).forEach((e,i) => {
             const colors = ["#f87171","#4ade80","#38bdf8","#a78bfa"];
-            content += `<div style="font-size:0.6rem;line-height:1.25;padding-left:4px;border-left:2px solid ${colors[i%colors.length]};margin-bottom:1px;word-break:break-word;" title="${escapeHtml(e.summary)}">${escapeHtml(e.summary)}</div>`;
+            content += `<div style="font-size:0.75rem;line-height:1.25;padding-left:4px;border-left:2px solid ${colors[i%colors.length]};margin-bottom:1px;word-break:break-word;" title="${escapeHtml(e.summary)}">${escapeHtml(e.summary)}</div>`;
           });
-          if (evs.length > 3) content += `<div style="font-size:0.55rem;color:var(--pico-muted-color);padding-left:4px;">+${evs.length-3}</div>`;
+          if (evs.length > 3) content += `<div style="font-size:0.75rem;color:var(--pico-muted-color);padding-left:4px;">+${evs.length-3}</div>`;
           content += `</div>`;
         }
         html += `<div style="${cellStyle}">${content}</div>`;
