@@ -204,7 +204,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .app-nav a.active { color: var(--accent-text); background: var(--accent-soft); font-weight: 600; }
 
 .user-area { display: flex; align-items: center; gap: 10px; }
-.user-name { font-size: 13px; color: var(--ink-soft); font-weight: 500; max-width: 12ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.user-name { font-size: 13px; color: var(--ink-soft); font-weight: 500; max-width: 18ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .avatar {
   width: 32px; height: 32px;
   border-radius: 50%;
@@ -435,6 +435,9 @@ kbd {
 
 .btn--sm { padding: 6px 11px; font-size: 12.5px; border-radius: var(--radius-xs); }
 .btn--icon { padding: 0; width: 34px; height: 34px; }
+.btn--sm.btn--icon { width: 30px; height: 30px; }
+.btn svg { width: 15px; height: 15px; flex: 0 0 auto; }
+.btn--icon svg { width: 16px; height: 16px; }
 
 /* ── 10. Segmented control (metric / period / sort) ────────────────────── */
 

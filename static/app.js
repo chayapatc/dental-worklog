@@ -56,6 +56,19 @@ function setTheme(theme) {
   syncThemeButton();
 }
 
+// Dates read like the design: "26 Oct 2026", matching the LINE bot's replies.
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+function dateLabel(iso) {
+  if (!iso || iso.length < 10) return iso || "";
+  const [y, m, d] = iso.split("-").map(Number);
+  return `${String(d).padStart(2, "0")} ${MONTHS[m - 1] || ""} ${y}`;
+}
+
+// Line icons instead of emoji, so the controls match the rest of the UI.
+const SVG_ATTRS = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"';
+const ICON_EDIT = `<svg ${SVG_ATTRS}><path d="M4 20h4L19 9l-4-4L4 16v4Z"/><path d="M14.5 5.5l4 4"/></svg>`;
+const ICON_TRASH = `<svg ${SVG_ATTRS}><path d="M4 7h16M9.5 7V5h5v2M6.5 7l1 12.5h9L17.5 7M10.5 11v5.5M13.5 11v5.5"/></svg>`;
+
 // Money + rate formatting, so every figure in the app reads the same way.
 function money(n) { return "฿" + Math.round(n || 0).toLocaleString("en-US"); }
 function rateText(r) { return money(r) + "/h"; }
@@ -131,6 +144,7 @@ function showApp() {
   document.getElementById("login-screen").classList.add("hidden");
   document.getElementById("app-screen").classList.remove("hidden");
   document.getElementById("user-name").textContent = currentUser.name;
+  document.getElementById("user-name").title = currentUser.name;
   const av = document.getElementById("user-avatar");
   const avatarUrl = currentUser.avatar_url || "";
   if (avatarUrl.startsWith("http://") || avatarUrl.startsWith("https://")) {
@@ -263,7 +277,7 @@ async function loadClinics() {
 
 function populateClinicSelect() {
   const sel = document.getElementById("log-clinic");
-  sel.innerHTML = '<option value="">-- Select --</option>';
+  sel.innerHTML = '<option value="">Select a clinic…</option>';
   clinicsCache.forEach(c => {
     sel.innerHTML += `<option value="${c.id}">${escapeHtml(c.name)}</option>`;
   });
@@ -290,7 +304,7 @@ async function refreshClinics() {
         <td>
           <div class="row-actions">
             <button class="btn btn--primary btn--sm" onclick="saveEdit(${c.id})">Save</button>
-            <button class="btn btn--ghost btn--sm" onclick="cancelEdit()" aria-label="Cancel">✕</button>
+            <button class="btn btn--ghost btn--sm btn--icon" onclick="cancelEdit()" aria-label="Cancel">✕</button>
           </div>
         </td>
       </tr>`;
@@ -518,7 +532,7 @@ async function refreshRecentLogs() {
       const hasHours = l.hours > 0;
       const rate = hasHours ? Math.round((l.income - l.expense) / l.hours) : 0;
       return `<tr id="log-row-${l.id}">
-        <td class="muted nowrap">${l.date}</td>
+        <td class="muted nowrap">${dateLabel(l.date)}</td>
         <td>${escapeHtml(l.clinic_name)}</td>
         <td class="num">${l.hours}h</td>
         <td class="num">${money(l.income)}</td>
@@ -526,8 +540,8 @@ async function refreshRecentLogs() {
         <td class="num ${hasHours ? rateClass(rate) : 'muted'}">${hasHours ? rateText(rate) : '—'}</td>
         <td>
           <div class="row-actions">
-            <button class="btn btn--ghost btn--sm" onclick="editLog(${l.id})" aria-label="Edit entry">✏️</button>
-            <button class="btn btn--danger btn--sm" onclick="confirmDeleteLog(${l.id})" aria-label="Delete entry">✕</button>
+            <button class="btn btn--ghost btn--sm btn--icon" onclick="editLog(${l.id})" aria-label="Edit entry">${ICON_EDIT}</button>
+            <button class="btn btn--danger btn--sm btn--icon" onclick="confirmDeleteLog(${l.id})" aria-label="Delete entry">${ICON_TRASH}</button>
           </div>
         </td>
       </tr>`;
