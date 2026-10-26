@@ -188,6 +188,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .logo-text { display: inline; }
 
 .app-nav { margin-left: auto; }
+.nav-account { display: none; }
 .app-nav ul { display: flex; gap: 2px; list-style: none; padding: 0; }
 .app-nav a {
   display: block;
@@ -228,6 +229,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 /* icon-only button (theme switch, menu) */
 .icon-btn {
+  flex: 0 0 auto;
   width: 32px; height: 32px;
   display: grid; place-items: center;
   border: 1px solid var(--line-strong);
@@ -738,10 +740,18 @@ dialog .dialog-actions {
 @media (max-width: 820px) {
   :root { --gutter: 16px; }
 
-  .app-header { min-height: 56px; gap: 10px; flex-wrap: nowrap; padding: 0 var(--gutter); }
-  .app-nav { display: none; }
-  #menu-toggle { display: grid; margin-left: auto; }
-  .user-name { display: none; }
+  .app-header { min-height: 56px; gap: 8px; flex-wrap: nowrap; padding: 0 var(--gutter); }
+  .app-nav { display: none; margin-left: 0; }
+
+  /* Phones: the wordmark and the log-out button move out of the bar, leaving
+     the tooth, theme, avatar and the menu button with room to breathe. */
+  .logo-text { display: none; }
+  .user-area { margin-left: auto; gap: 8px; }
+  .user-area .user-name { display: none; }
+  .user-area > .btn { display: none; }
+
+  .icon-btn { width: 40px; height: 40px; }
+  #menu-toggle { display: grid; }
 
   /* dropdown nav when the menu button is pressed */
   .app-nav.mobile-open {
@@ -758,6 +768,24 @@ dialog .dialog-actions {
   }
   .app-nav.mobile-open ul { flex-direction: column; gap: 2px; }
   .app-nav.mobile-open a { padding: 11px 12px; font-size: 14px; }
+  .app-nav.mobile-open .nav-account {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 6px;
+    padding: 10px 12px 4px;
+    border-top: 1px solid var(--line);
+  }
+  .nav-account .btn { min-height: 36px; padding: 8px 14px; }
+  .nav-account-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 
   .container { padding-top: 18px; padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
 

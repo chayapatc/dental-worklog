@@ -143,8 +143,11 @@ function showLogin() {
 function showApp() {
   document.getElementById("login-screen").classList.add("hidden");
   document.getElementById("app-screen").classList.remove("hidden");
-  document.getElementById("user-name").textContent = currentUser.name;
-  document.getElementById("user-name").title = currentUser.name;
+  // the name appears in the header and in the mobile menu
+  document.querySelectorAll("[data-user-name]").forEach(el => {
+    el.textContent = currentUser.name;
+    el.title = currentUser.name;
+  });
   const av = document.getElementById("user-avatar");
   const avatarUrl = currentUser.avatar_url || "";
   if (avatarUrl.startsWith("http://") || avatarUrl.startsWith("https://")) {
@@ -157,8 +160,6 @@ function showApp() {
   document.getElementById("color-swatches").innerHTML = buildColorSwatches(COLOR_PRESETS[0]);
   document.getElementById("clinic-color-picker").value = COLOR_PRESETS[0];
 
-  // Check LINE binding status
-  checkLineBinding();
 
   // Handle LINE binding success redirect
   if (window.location.search.includes("line_bound=1")) {
@@ -167,16 +168,6 @@ function showApp() {
   }
 }
 
-async function checkLineBinding() {
-  try {
-    const res = await fetch("/api/line/status");
-    if (res.status === 401) return;
-    const data = await res.json();
-    const badge = document.getElementById("line-badge");
-    badge.classList.toggle("hidden", !data.bound);
-    badge.title = data.bound ? "LINE connected" : "";
-  } catch {}
-}
 
 function logout() {
   window.location.href = "/auth/logout";

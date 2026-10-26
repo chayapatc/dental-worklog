@@ -48,10 +48,6 @@
     <span class="logo-text">Dental Worklog</span>
   </a>
 
-  <button id="menu-toggle" class="icon-btn" aria-label="Open menu" aria-expanded="false" aria-controls="main-nav">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
-  </button>
-
   <nav class="app-nav" id="main-nav" aria-label="Views">
     <ul>
       <li><a href="#" data-view="log"{% if initial_view == 'log' %} class="active"{% endif %}>Log</a></li>
@@ -60,20 +56,27 @@
       <li><a href="#" data-view="trends"{% if initial_view == 'trends' %} class="active"{% endif %}>Trends</a></li>
       <li><a href="#" data-view="monthly"{% if initial_view == 'monthly' %} class="active"{% endif %}>Monthly P&amp;L</a></li>
       <li><a href="#" data-view="income"{% if initial_view == 'income' %} class="active"{% endif %}>Reports</a></li>
+      <li class="nav-account">
+        <span class="nav-account-name" data-user-name></span>
+        <button class="btn btn--ghost btn--sm" onclick="logout()">Log out</button>
+      </li>
     </ul>
   </nav>
 
   <div class="user-area">
-    <span id="line-badge" class="badge hidden" title="LINE connected">LINE</span>
     <button class="icon-btn" id="themeBtn" type="button" aria-label="Switch to dark theme">
       <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5 9 9 0 1 0 20.5 14.6Z"/>
       </svg>
     </button>
     <img id="user-avatar" class="avatar" src="" alt="" onerror="this.style.display='none'">
-    <span class="user-name" id="user-name"></span>
+    <span class="user-name" id="user-name" data-user-name></span>
     <button class="btn btn--ghost btn--sm" onclick="logout()">Log out</button>
   </div>
+
+  <button id="menu-toggle" class="icon-btn" aria-label="Open menu" aria-expanded="false" aria-controls="main-nav">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+  </button>
 </header>
 
 <main class="container">
