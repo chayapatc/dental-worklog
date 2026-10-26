@@ -26,6 +26,40 @@ function ensureChartJs() {
   return chartJsPromise;
 }
 
+// ── Theme (light / dark) ────────────────────────────────────────────────
+// The chosen theme is applied by an inline script in <head> before first
+// paint; this module only owns the toggle and keeps its label in sync.
+const THEME_ICONS = {
+  // icon shows the theme you would switch TO
+  light: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  dark: '<path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5 9 9 0 1 0 20.5 14.6Z"/>',
+};
+
+function currentTheme() {
+  return document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
+}
+
+function syncThemeButton() {
+  const btn = document.getElementById("themeBtn");
+  const icon = document.getElementById("themeIcon");
+  if (!btn || !icon) return;
+  const next = currentTheme() === "dark" ? "light" : "dark";
+  icon.innerHTML = THEME_ICONS[next];
+  const label = `Switch to ${next} theme`;
+  btn.setAttribute("aria-label", label);
+  btn.setAttribute("title", label);
+}
+
+function setTheme(theme) {
+  document.documentElement.setAttribute("data-theme", theme);
+  try { localStorage.setItem("dw-theme", theme); } catch (e) {}
+  syncThemeButton();
+}
+
+// Money + rate formatting, so every figure in the app reads the same way.
+function money(n) { return "฿" + Math.round(n || 0).toLocaleString("en-US"); }
+function rateText(r) { return money(r) + "/h"; }
+
 // HTML Escaping Utility to prevent XSS
 function escapeHtml(str) {
   if (str === null || str === undefined) return "";
@@ -47,11 +81,9 @@ let selectedColor = COLOR_PRESETS[0];
 
 function buildColorSwatches(currentColor) {
   return COLOR_PRESETS.map(c =>
-    `<span onclick="selectColor('${c}')" style="
-      display:inline-block;width:22px;height:22px;border-radius:50%;
-      background:${c};cursor:pointer;border:2px solid ${c === currentColor ? '#fff' : 'transparent'};
-      transition:border 0.15s;
-    " title="${c}"></span>`
+    `<button type="button" class="swatch" style="--swatch:${c}"
+       aria-pressed="${c === currentColor}" aria-label="Colour ${c}"
+       onclick="selectColor('${c}')" title="${c}"></button>`
   ).join("");
 }
 
@@ -127,12 +159,8 @@ async function checkLineBinding() {
     if (res.status === 401) return;
     const data = await res.json();
     const badge = document.getElementById("line-badge");
-    if (data.bound) {
-      badge.style.display = "";
-      badge.title = "LINE connected";
-    } else {
-      badge.style.display = "none";
-    }
+    badge.classList.toggle("hidden", !data.bound);
+    badge.title = data.bound ? "LINE connected" : "";
   } catch {}
 }
 
@@ -175,9 +203,16 @@ document.querySelectorAll("nav [data-view], .bottom-nav [data-view]").forEach(li
   });
 });
 
-document.getElementById("menu-toggle").addEventListener("click", () => {
-  document.getElementById("main-nav").classList.toggle("mobile-open");
+document.getElementById("menu-toggle").addEventListener("click", (e) => {
+  const nav = document.getElementById("main-nav");
+  const open = nav.classList.toggle("mobile-open");
+  e.currentTarget.setAttribute("aria-expanded", String(open));
 });
+
+document.getElementById("themeBtn").addEventListener("click", () => {
+  setTheme(currentTheme() === "dark" ? "light" : "dark");
+});
+syncThemeButton();
 
 // ── Period & Metric Toggles ─────────────────────────────────────────────
 document.querySelectorAll(".toggle-group button").forEach(btn => {
@@ -209,7 +244,7 @@ async function api(url, opts = {}) {
 function toast(msg, isError = false) {
   const el = document.getElementById("toast");
   el.textContent = msg;
-  el.className = "toast show" + (isError ? " error" : "");
+  el.className = "toast show" + (isError ? " is-error" : "");
   clearTimeout(el._timer);
   el._timer = setTimeout(() => el.classList.remove("show"), 2500);
 }
@@ -241,29 +276,32 @@ async function refreshClinics() {
   await loadClinics();
   const tbody = document.querySelector("#clinics-table tbody");
   if (clinicsCache.length === 0) {
-    tbody.innerHTML = '<tr><td class="text-center" colspan="3">No clinics yet</td></tr>';
+    tbody.innerHTML = '<tr><td class="text-center muted" colspan="2">No clinics yet</td></tr>';
     return;
   }
   tbody.innerHTML = clinicsCache.map(c => {
-    const dot = `<span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${c.color};margin-right:0.5rem;vertical-align:middle;"></span>`;
     if (editingClinicId === c.id) {
       return `<tr>
         <td>
-          <input type="text" id="edit-name-${c.id}" value="${escapeHtml(c.name)}" style="width:100%;margin-bottom:0.3rem;">
-          <div class="edit-swatches-${c.id}" style="display:flex;gap:0.2rem;align-items:center;">${buildColorSwatchesForEdit(c.id, c.color)}</div>
-          <input type="color" id="edit-color-picker-${c.id}" value="${c.color}" onchange="selectEditCustomColor(${c.id}, this.value)" style="width:28px;height:28px;padding:0;border:none;cursor:pointer;margin-top:0.2rem;" title="Custom color">
+          <input type="text" id="edit-name-${c.id}" class="input--sm" value="${escapeHtml(c.name)}" aria-label="Clinic name">
+          <div class="swatches swatches--edit">${buildColorSwatchesForEdit(c.id, c.color)}</div>
+          <input type="color" id="edit-color-picker-${c.id}" value="${c.color}" onchange="selectEditCustomColor(${c.id}, this.value)" title="Custom colour">
         </td>
-        <td style="text-align:right;white-space:nowrap;">
-          <button class="outline secondary" style="padding:0.2rem 0.5rem;font-size:0.75rem;" onclick="saveEdit(${c.id})">Save</button>
-          <button class="outline contrast" style="padding:0.2rem 0.5rem;font-size:0.75rem;" onclick="cancelEdit()">✕</button>
+        <td>
+          <div class="row-actions">
+            <button class="btn btn--primary btn--sm" onclick="saveEdit(${c.id})">Save</button>
+            <button class="btn btn--ghost btn--sm" onclick="cancelEdit()" aria-label="Cancel">✕</button>
+          </div>
         </td>
       </tr>`;
     }
     return `<tr>
-      <td>${dot}${escapeHtml(c.name)}</td>
-      <td style="text-align:right;white-space:nowrap;">
-        <button class="outline secondary" style="padding:0.2rem 0.5rem;font-size:0.75rem;" onclick="startEdit(${c.id})">Edit</button>
-        <button class="outline contrast" style="padding:0.2rem 0.5rem;font-size:0.75rem;" onclick="confirmDelete(${c.id})">Delete</button>
+      <td><span class="clinic-cell"><span class="dot" style="background:${c.color}"></span>${escapeHtml(c.name)}</span></td>
+      <td>
+        <div class="row-actions">
+          <button class="btn btn--ghost btn--sm" onclick="startEdit(${c.id})">Edit</button>
+          <button class="btn btn--danger btn--sm" onclick="confirmDelete(${c.id})">Delete</button>
+        </div>
       </td>
     </tr>`;
   }).join("");
@@ -273,11 +311,9 @@ let editingColor = null;
 
 function buildColorSwatchesForEdit(clinicId, currentColor) {
   return COLOR_PRESETS.map(c =>
-    `<span onclick="selectEditColor(${clinicId}, '${c}')" style="
-      display:inline-block;width:20px;height:20px;border-radius:50%;
-      background:${c};cursor:pointer;border:2px solid ${c === currentColor ? '#fff' : 'transparent'};
-      transition:border 0.15s;
-    " title="${c}"></span>`
+    `<button type="button" class="swatch swatch--sm" style="--swatch:${c}"
+       aria-pressed="${c === currentColor}" aria-label="Colour ${c}"
+       onclick="selectEditColor(${clinicId}, '${c}')" title="${c}"></button>`
   ).join("");
 }
 
@@ -413,15 +449,17 @@ function editLog(id) {
   ).join("");
 
   row.innerHTML = `
-    <td><input type="date" value="${log.date}" id="edit-date-${id}" style="margin:0;padding:0.2rem;font-size:0.75rem;width:100%;"></td>
-    <td><select id="edit-clinic-${id}" style="margin:0;padding:0.2rem;font-size:0.75rem;width:100%;">${clinicOptions}</select></td>
-    <td><input type="number" value="${log.hours}" id="edit-hours-${id}" step="0.5" min="0" style="margin:0;padding:0.2rem;font-size:0.75rem;width:60px;"></td>
-    <td style="text-align:right"><input type="number" value="${log.income}" id="edit-income-${id}" step="100" min="0" style="margin:0;padding:0.2rem;font-size:0.75rem;width:90px;text-align:right;"></td>
-    <td style="text-align:right"><input type="number" value="${log.expense}" id="edit-expense-${id}" step="100" min="0" style="margin:0;padding:0.2rem;font-size:0.75rem;width:80px;text-align:right;"></td>
-    <td>-</td>
-    <td style="text-align:center;white-space:nowrap;">
-      <button class="primary" style="padding:0.1rem 0.4rem;font-size:0.75rem;" onclick="saveEditLog(${id})">Save</button>
-      <button class="outline secondary" style="padding:0.1rem 0.4rem;font-size:0.75rem;" onclick="refreshRecentLogs()">Cancel</button>
+    <td><input type="date" value="${log.date}" id="edit-date-${id}" class="input--sm" aria-label="Date"></td>
+    <td><select id="edit-clinic-${id}" class="input--sm" aria-label="Clinic">${clinicOptions}</select></td>
+    <td><input type="number" value="${log.hours}" id="edit-hours-${id}" step="0.5" min="0" class="input--sm input--num" aria-label="Hours"></td>
+    <td><input type="number" value="${log.income}" id="edit-income-${id}" step="100" min="0" class="input--sm input--num" aria-label="Income"></td>
+    <td><input type="number" value="${log.expense}" id="edit-expense-${id}" step="100" min="0" class="input--sm input--num" aria-label="Expense"></td>
+    <td class="num muted">—</td>
+    <td>
+      <div class="row-actions">
+        <button class="btn btn--primary btn--sm" onclick="saveEditLog(${id})">Save</button>
+        <button class="btn btn--ghost btn--sm" onclick="refreshRecentLogs()">Cancel</button>
+      </div>
     </td>`;
 }
 
@@ -472,30 +510,34 @@ async function refreshRecentLogs() {
     logsCache = logs;
 
     if (logs.length === 0) {
-      tbody.innerHTML = '<tr><td class="text-center" colspan="7">No entries yet</td></tr>';
+      tbody.innerHTML = '<tr><td class="text-center muted" colspan="7">No entries yet</td></tr>';
       footer.innerHTML = "";
       return;
     }
-    tbody.innerHTML = logs.map(l =>
-      `<tr id="log-row-${l.id}">
-        <td>${l.date}</td>
+    tbody.innerHTML = logs.map(l => {
+      const hasHours = l.hours > 0;
+      const rate = hasHours ? Math.round((l.income - l.expense) / l.hours) : 0;
+      return `<tr id="log-row-${l.id}">
+        <td class="muted nowrap">${l.date}</td>
         <td>${escapeHtml(l.clinic_name)}</td>
-        <td>${l.hours}h</td>
-        <td style="text-align:right">฿${l.income.toLocaleString()}</td>
-        <td style="text-align:right">${l.expense > 0 ? '-฿' + l.expense.toLocaleString() : '-'}</td>
-        <td style="text-align:right" class="${l.hours > 0 ? 'rate-good' : ''}">${l.hours > 0 ? '฿' + Math.round((l.income - l.expense)/l.hours) + '/h' : '-'}</td>
-        <td style="text-align:center;white-space:nowrap;">
-          <button class="outline" style="padding:0.1rem 0.4rem;font-size:0.7rem;" onclick="editLog(${l.id})" title="Edit">✏️</button>
-          <button class="outline contrast" style="padding:0.1rem 0.4rem;font-size:0.7rem;" onclick="confirmDeleteLog(${l.id})" title="Delete">✕</button>
+        <td class="num">${l.hours}h</td>
+        <td class="num">${money(l.income)}</td>
+        <td class="num ${l.expense > 0 ? '' : 'muted'}">${l.expense > 0 ? '−' + money(l.expense) : '—'}</td>
+        <td class="num ${hasHours ? rateClass(rate) : 'muted'}">${hasHours ? rateText(rate) : '—'}</td>
+        <td>
+          <div class="row-actions">
+            <button class="btn btn--ghost btn--sm" onclick="editLog(${l.id})" aria-label="Edit entry">✏️</button>
+            <button class="btn btn--danger btn--sm" onclick="confirmDeleteLog(${l.id})" aria-label="Delete entry">✕</button>
+          </div>
         </td>
-      </tr>`
-    ).join("");
+      </tr>`;
+    }).join("");
 
     footer.innerHTML = `
-      <div style="display:flex;align-items:center;justify-content:center;gap:0.75rem;padding:0.75rem 0;">
-        <button class="outline secondary" style="padding:0.2rem 0.75rem;font-size:0.8rem;" onclick="goToPage(${page - 1})" ${page <= 1 ? 'disabled' : ''}>← Prev</button>
-        <span style="font-size:0.8rem;color:var(--pico-muted-color);">Page ${page} of ${total_pages} (${total} entries)</span>
-        <button class="outline secondary" style="padding:0.2rem 0.75rem;font-size:0.8rem;" onclick="goToPage(${page + 1})" ${page >= total_pages ? 'disabled' : ''}>Next →</button>
+      <div class="pager">
+        <button class="btn btn--ghost btn--sm" onclick="goToPage(${page - 1})" ${page <= 1 ? 'disabled' : ''}>← Prev</button>
+        <span class="pager-info">Page ${page} of ${total_pages} · ${total} entries</span>
+        <button class="btn btn--ghost btn--sm" onclick="goToPage(${page + 1})" ${page >= total_pages ? 'disabled' : ''}>Next →</button>
       </div>`;
   } catch (e) {
     toast(e.message, true);
@@ -545,8 +587,8 @@ async function submitLog() {
     document.getElementById("log-income").value = "";
     document.getElementById("log-expense").value = "";
     const net = incomeVal - expenseVal;
-    const rate = hoursVal > 0 ? ` (฿${Math.round(net / hoursVal)}/h)` : "";
-    toast(`Saved! Net: ฿${Math.round(net)}${rate}`);
+    const rate = hoursVal > 0 ? ` (${rateText(net / hoursVal)})` : "";
+    toast(`Saved — net ${money(net)}${rate}`);
     currentPage = 1;
     await refreshRecentLogs();
   } catch (e) {
@@ -588,7 +630,7 @@ async function refreshTrends() {
     const labelEl = document.getElementById("trends-period-label");
 
     if (data.length === 0) {
-      tbody.innerHTML = '<tr><td class="text-center" colspan="5">No data yet — log some work hours first</td></tr>';
+      tbody.innerHTML = '<tr><td class="text-center muted" colspan="5">No data yet — log some work hours first</td></tr>';
       labelEl.textContent = "";
     } else {
       const periods = [...new Set(data.map(d => d.period))].sort().reverse();
@@ -609,15 +651,13 @@ async function refreshTrends() {
       }
       tbody.innerHTML = ranked.map((d, i) => {
         const value = isRate ? d.hourly_rate : (d.net_income || 0);
-        const valueStr = isRate
-          ? `฿${d.hourly_rate}/h`
-          : `฿${value.toLocaleString()}`;
+        const valueStr = isRate ? rateText(d.hourly_rate) : money(value);
         return `<tr>
-          <td class="rank">#${i + 1}</td>
+          <td class="rank">${i + 1}</td>
           <td>${escapeHtml(d.clinic_name)}</td>
-          <td>${d.total_hours.toFixed(1)}h</td>
-          <td style="text-align:right">${valueStr}</td>
-          <td style="text-align:right" class="${rateClass(d.hourly_rate)}">฿${d.hourly_rate}/h</td>
+          <td class="num">${d.total_hours.toFixed(1)}h</td>
+          <td class="num">${valueStr}</td>
+          <td class="num ${rateClass(d.hourly_rate)}">${rateText(d.hourly_rate)}</td>
         </tr>`;
       }).join("");
     }
@@ -680,18 +720,18 @@ async function refreshIncomeRanking() {
     const { rankings } = result;
 
     if (rankings.length === 0) {
-      tbody.innerHTML = '<tr><td class="text-center" colspan="7">No data in this date range</td></tr>';
+      tbody.innerHTML = '<tr><td class="text-center muted" colspan="7">No data in this date range</td></tr>';
       return;
     }
     tbody.innerHTML = rankings.map((d, i) =>
       `<tr>
-        <td class="rank">#${i + 1}</td>
+        <td class="rank">${i + 1}</td>
         <td>${escapeHtml(d.clinic_name)}</td>
-        <td>${d.total_hours.toFixed(1)}h</td>
-        <td style="text-align:right">฿${d.total_income.toLocaleString()}</td>
-        <td style="text-align:right">${d.total_expense > 0 ? '-฿' + d.total_expense.toLocaleString() : '-'}</td>
-        <td style="text-align:right" class="rate-good">฿${d.net_income.toLocaleString()}</td>
-        <td style="text-align:right" class="${rateClass(d.hourly_rate)}">฿${d.hourly_rate}/h</td>
+        <td class="num">${d.total_hours.toFixed(1)}h</td>
+        <td class="num">${money(d.total_income)}</td>
+        <td class="num ${d.total_expense > 0 ? '' : 'muted'}">${d.total_expense > 0 ? '−' + money(d.total_expense) : '—'}</td>
+        <td class="num rate-good">${money(d.net_income)}</td>
+        <td class="num ${rateClass(d.hourly_rate)}">${rateText(d.hourly_rate)}</td>
       </tr>`
     ).join("");
   } catch (e) {
@@ -868,12 +908,11 @@ async function refreshTracker() {
     const startOffset = -firstDow;
 
     const cal = document.getElementById("tracker-calendar");
-    cal.style.gridTemplateColumns = "repeat(7,1fr)";
 
     // Weekday headers: single letters
     let html = ["S","M","T","W","T","F","S"].map((h,i) => {
-      const isToday = i === today.getDay();
-      return `<div style="padding:6px 2px;font-size:0.7rem;font-weight:600;text-align:center;color:${isToday?'var(--pico-primary-background)':'var(--pico-muted-color)'};">${h}</div>`;
+      const isTodayDow = i === today.getDay();
+      return `<div class="cal-head${isTodayDow ? " is-today" : ""}">${h}</div>`;
     }).join("");
 
     for (let week = 0; week < 6; week++) {
@@ -890,31 +929,27 @@ async function refreshTracker() {
         const d = dayMap[dateStr];
         const evs = evMap[dateStr] || [];
 
-        let cellStyle = "min-height:52px;padding:3px 4px;background:var(--pico-card-background-color);border:1px solid var(--pico-card-border-color);overflow:hidden;";
-        if (isToday) cellStyle += "box-shadow:inset 0 0 0 2px var(--pico-primary-background);";
+        // Out-of-month days are dimmer via a text colour. Never dim the whole
+        // cell with opacity: that pushes every child below WCAG AA contrast.
+        const cellClass = ["cal-cell",
+          isCurrentMonth ? "" : "is-outside",
+          isToday ? "is-today" : ""].filter(Boolean).join(" ");
 
-        // Out-of-month days stay visually dimmer via a dedicated text color.
-        // Do NOT dim the whole cell with opacity: that drops every child
-        // (day number, event text) below WCAG AA contrast.
-        const dayColor = isCurrentMonth ? "var(--pico-color)" : "#8f9aab";
-        let content = `<div style="font-size:0.75rem;font-weight:${isToday?'700':'400'};color:${dayColor};margin-bottom:2px;">${dayNum}</div>`;
+        let content = `<div class="cal-day">${dayNum}</div>`;
 
         if (d && d.total > 0) {
           const dots = d.clinics.map(c =>
-            `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${c.color};margin:0 1px;" title="${escapeHtml(c.clinic_name)}: ${c.count}"></span>`
+            `<span class="cal-dot" style="background:${c.color}" title="${escapeHtml(c.clinic_name)}: ${c.count}"></span>`
           ).join("");
-          content += `<div style="display:flex;align-items:center;gap:2px;margin-bottom:1px;">${dots}<span style="font-weight:700;font-size:0.75rem;color:var(--pico-primary-background);">${d.total}</span></div>`;
+          content += `<div class="cal-count"><span class="cal-dots">${dots}</span>${d.total}</div>`;
         }
         if (evs.length > 0) {
-          content += `<div style="margin-top:2px;">`;
           evs.slice(0,3).forEach((e,i) => {
-            const colors = ["#f87171","#4ade80","#38bdf8","#a78bfa"];
-            content += `<div style="font-size:0.75rem;line-height:1.25;padding-left:4px;border-left:2px solid ${colors[i%colors.length]};margin-bottom:1px;word-break:break-word;" title="${escapeHtml(e.summary)}">${escapeHtml(e.summary)}</div>`;
+            content += `<div class="cal-event cal-event--${i % 4}" title="${escapeHtml(e.summary)}">${escapeHtml(e.summary)}</div>`;
           });
-          if (evs.length > 3) content += `<div style="font-size:0.75rem;color:var(--pico-muted-color);padding-left:4px;">+${evs.length-3}</div>`;
-          content += `</div>`;
+          if (evs.length > 3) content += `<div class="cal-more">+${evs.length - 3} more</div>`;
         }
-        html += `<div style="${cellStyle}">${content}</div>`;
+        html += `<div class="${cellClass}">${content}</div>`;
       }
     }
 
